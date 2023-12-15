@@ -190,3 +190,5 @@ pip-selfcheck.json
 app/data
 app/models
 *.ipynb
+*/packages
+*.zip
