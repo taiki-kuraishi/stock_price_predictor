@@ -1,4 +1,3 @@
-import os
 import joblib
 import pandas as pd
 import yfinance as yf
@@ -17,6 +16,10 @@ def update_model_and_predict(
     interval: int,
     predict_horizon: int,
 ) -> None:
+    """
+    update model and predict
+    modelを更新して予測する
+    """
     # read preprocessed csv
     preprocessed_csv = pd.read_csv(
         f"{csv_dir}/{stock_name}_{str(predict_horizon)}h_preprocessed.csv",
@@ -104,16 +107,3 @@ def update_model_and_predict(
         )
 
     print("update_model_and_predict")
-
-
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-
-    PREDICTION_HORIZON = 1
-    # load env
-    load_dotenv(dotenv_path="../.env")
-    target_stock = os.environ["TARGET_STOCK"]
-    stock_name = os.environ["STOCK_NAME"]
-    interval = os.environ["INTERVAL"]
-
-    update_model_and_predict(stock_name, target_stock, interval)
