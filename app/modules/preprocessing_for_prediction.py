@@ -36,6 +36,7 @@ def split_datetime(df: pd.DataFrame) -> pd.DataFrame:
 def split_target_and_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     split target and features
+    目的変数:xと説明変数:yに分割する
     """
     drop_columns = ["Datetime", "Close"]
     y = df["Close"]
