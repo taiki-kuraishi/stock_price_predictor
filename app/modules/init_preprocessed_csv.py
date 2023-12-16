@@ -10,6 +10,10 @@ def init_preprocessed_csv(
     interval: str,
     predict_horizon: int,
 ) -> None:
+    """
+    init preprocess csv
+    学習用データのcsvを初期化する
+    """
     # get data from yahoo finance
     try:
         df = yf.download(tickers=target_stock, period=period, interval=interval)
