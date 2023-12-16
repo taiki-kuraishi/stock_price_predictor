@@ -1,4 +1,3 @@
-import os
 import joblib
 import pandas as pd
 from sklearn.linear_model import PassiveAggressiveRegressor
@@ -7,6 +6,10 @@ from .preprocessing_for_prediction import split_target_and_features
 
 
 def init_model(csv_dir: str, model_dir, stock_name: str, predict_horizon: int) -> None:
+    """
+    init model
+    modelの初期化
+    """
     # read preprocessed csv
     df = pd.read_csv(
         f"{csv_dir}/{stock_name}_{str(predict_horizon)}h_preprocessed.csv",
@@ -35,14 +38,3 @@ def init_model(csv_dir: str, model_dir, stock_name: str, predict_horizon: int) -
     )
 
     print("init_model finish")
-
-
-if __name__ == "__main__":
-    from dotenv import load_dotenv
-
-    load_dotenv(dotenv_path="../.env")
-    stock_name = os.environ["STOCK_NAME"]
-
-    PREDICTION_HORIZON = 1
-
-    init_model(stock_name, PREDICTION_HORIZON)
