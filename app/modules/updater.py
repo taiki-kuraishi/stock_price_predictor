@@ -1,0 +1,88 @@
+import joblib
+import pandas as pd
+from datetime import datetime
+from datetime import timedelta
+from .preprocessing_for_prediction import split_target_and_features, shift_dataFrame
+from .yfinance_fetcher import get_data_for_period_from_yfinance
+
+
+def get_updated_data(
+    target_stock: str,
+    interval: int,
+    df_col_order: list,
+    df: pd.DataFrame,
+) -> pd.DataFrame | None:
+    """
+    update model and predict
+    modelを更新して予測する
+    """
+
+    # get last_updated_datetime YYYY-MM-DD HH:MM:SS
+    last_updated_datetime = df.tail(1)["datetime"].values[0]
+    # last_updated_datetime = "2023-12-10 15:30:00-05:00"
+    print("last updated datetime: " + last_updated_datetime)
+
+    # last_updated_datetime to YYYY-MM-DD
+    last_updated_date = last_updated_datetime[:10]
+    print("last updated date: " + last_updated_date)
+
+    # get tomorrow
+    tomorrow = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
+    print("tomorrow: " + tomorrow)
+
+    # get data from yahoo finance
+    update_df = get_data_for_period_from_yfinance(
+        target_stock, last_updated_date, tomorrow, interval, df_col_order
+    )
+
+    # update_dfの[datetime]がlast_updated_dateより前の場合は、削除する
+    update_df = update_df[update_df["datetime"] > last_updated_datetime]
+
+    if update_df.empty:
+        print("no update")
+        return None
+
+    # get last index from preprocessed csv
+    last_index = df.tail(1)["id"].values[0]
+    print("last index: " + str(last_index))
+
+    # add id
+    update_df["id"] = update_df.index + last_index + 1
+
+    # updateされた件数を出力
+    update_rows = len(update_df)
+    print("update rows: " + str(update_rows))
+
+    return update_df
+
+
+def update_model_and_predict(
+    tmp_dir: str,
+    stock_name: str,
+    predict_horizon: int,
+    df: pd.DataFrame,
+) -> None:
+    # # 増分学習用のデータを作成
+    # train_df = shift_dataFrame(update_df, predict_horizon).tail(update_rows)
+    # x, y = split_target_and_features(train_df)
+
+    # # model load
+    # model = joblib.load(
+    #     f"{tmp_dir}/{stock_name}_{str(predict_horizon)}h_PassiveAggressiveRegressor.pkl"
+    # )
+
+    # # model update
+    # model.fit(x, y)
+
+    # # predict
+    # x_predict, _ = split_target_and_features(update_df.tail(1))
+    # y_predict = model.predict(x_predict)
+    # print("predict: " + str(y_predict))
+
+    # # model output
+    # joblib.dump(
+    #     model,
+    #     f"{tmp_dir}/{stock_name}_{str(predict_horizon)}h_PassiveAggressiveRegressor.pkl",
+    # )
+
+    print("update_model_and_predict")
