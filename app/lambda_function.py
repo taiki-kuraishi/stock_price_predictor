@@ -22,6 +22,7 @@ def handler(event, context):
     aws_region_name: str = os.getenv("AWS_REGION_NAME")
     aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
+    # aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
     aws_dynamodb_train_table_name: str = os.getenv("AWS_DYNAMODB_TRAIN_TABLE_NAME")
     aws_dynamo_prediction_table_name: str = os.getenv(
         "AWS_DYNAMODB_PREDICTION_TABLE_NAME"
