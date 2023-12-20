@@ -97,18 +97,21 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv(override=True)
-    target_stock: str = os.environ["TARGET_STOCK"]
-    period: str = os.environ["PERIOD"]
-    interval: str = os.environ["INTERVAL"]
-    df_col_order: list = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
+    target_stock: str = os.getenv("TARGET_STOCK")
+    stock_name: str = os.getenv("STOCK_NAME")
+    period: str = os.getenv("PERIOD")
+    interval: str = os.getenv("INTERVAL")
+    df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
 
     # get_all_from_yfinance
     df = get_all_from_yfinance(target_stock, period, interval, df_col_order)
     print(df)
 
+    # save as csv
+    df.to_csv(f"../../tmp/spp_{stock_name}_{period}_{interval}.csv", index=False)
+
     # get_data_for_period_from_yfinance
     today = datetime.today().strftime("%Y-%m-%d")
-    today = "2023-12-10"
     tomorrow = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
     print("today: " + today, "\ntomorrow: " + tomorrow)
 
