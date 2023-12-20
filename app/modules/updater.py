@@ -55,34 +55,3 @@ def get_updated_data(
 
     return update_df
 
-
-def update_model_and_predict(
-    tmp_dir: str,
-    stock_name: str,
-    predict_horizon: int,
-    df: pd.DataFrame,
-) -> None:
-    # # 増分学習用のデータを作成
-    # train_df = shift_dataFrame(update_df, predict_horizon).tail(update_rows)
-    # x, y = split_target_and_features(train_df)
-
-    # # model load
-    # model = joblib.load(
-    #     f"{tmp_dir}/{stock_name}_{str(predict_horizon)}h_PassiveAggressiveRegressor.pkl"
-    # )
-
-    # # model update
-    # model.fit(x, y)
-
-    # # predict
-    # x_predict, _ = split_target_and_features(update_df.tail(1))
-    # y_predict = model.predict(x_predict)
-    # print("predict: " + str(y_predict))
-
-    # # model output
-    # joblib.dump(
-    #     model,
-    #     f"{tmp_dir}/{stock_name}_{str(predict_horizon)}h_PassiveAggressiveRegressor.pkl",
-    # )
-
-    print("update_model_and_predict")
