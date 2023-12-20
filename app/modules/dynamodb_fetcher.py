@@ -4,11 +4,11 @@ from yfinance_fetcher import get_all_from_yfinance
 
 
 def get_data_from_dynamodb(
+    df_col_order: list,
     region_name: str,
     access_key_id: str,
     secret_access_key: str,
     dynamodb_table_name: str,
-    df_col_order: list,
 ) -> pd.DataFrame:
     """
     get data from dynamodb
@@ -149,11 +149,11 @@ def init_dynamodb(
 
     # get all data from dynamodb
     df = get_data_from_dynamodb(
+        df_col_order,
         region_name,
         access_key_id,
         secret_access_key,
         dynamodb_table_name,
-        df_col_order,
     )
 
     # delete all data from dynamodb

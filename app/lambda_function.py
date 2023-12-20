@@ -51,18 +51,18 @@ def handler(event, context):
         }
 
     # init dynamodb
-    #init model and predict
-    #update predict
-    #update model
+    # init model and predict
+    # update predict
+    # update model
     if event["handler"] == "init":
         # download data from dynamodb
         try:
             df = get_data_from_dynamodb(
+                df_col_order,
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
                 aws_dynamodb_train_table_name,
-                df_col_order,
             )
         except Exception as e:
             print(e)
@@ -116,11 +116,11 @@ def handler(event, context):
     elif event["handler"] == "update":
         # データの取得
         df = get_data_from_dynamodb(
+            df_col_order,
             aws_region_name,
             aws_access_key_id,
             aws_secret_access_key,
             aws_dynamodb_train_table_name,
-            df_col_order,
         )
 
         # データベースの最終更新日時をもとに、新たにデータを取得
