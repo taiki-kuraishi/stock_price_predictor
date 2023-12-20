@@ -50,7 +50,10 @@ def handler(event, context):
             ),
         }
 
-    # init preprocess csv and model
+    # init dynamodb
+    #init model and predict
+    #update predict
+    #update model
     if event["handler"] == "init":
         # download data from dynamodb
         try:
