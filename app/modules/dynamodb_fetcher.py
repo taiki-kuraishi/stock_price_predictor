@@ -1,10 +1,10 @@
 import boto3
 import pandas as pd
 from yfinance_fetcher import get_all_from_yfinance
+from dataframe_operations import post_process_train_data_from_dynamodb
 
 
 def get_data_from_dynamodb(
-    df_col_order: list,
     region_name: str,
     access_key_id: str,
     secret_access_key: str,
@@ -31,16 +31,8 @@ def get_data_from_dynamodb(
 
     df = pd.DataFrame(response["Items"])
 
-    # sort columns
-    df = df.reindex(columns=df_col_order)
-
-    # sort id
-    df = df.sort_values("id", ascending=True)
-
-    # reset index
-    df = df.reset_index(drop=True)
-
     return df
+
 
 def delete_data_from_dynamodb(
     region_name: str,
@@ -125,7 +117,7 @@ def upload_dynamodb(
     return None
 
 
-def init_dynamodb(
+def init_train_table_dynamodb(
     tmp_dir: str,
     target_stock: str,
     stock_name: str,
@@ -146,12 +138,13 @@ def init_dynamodb(
 
     # get all data from dynamodb
     df = get_data_from_dynamodb(
-        df_col_order,
         region_name,
         access_key_id,
         secret_access_key,
         dynamodb_table_name,
     )
+
+    df = post_process_train_data_from_dynamodb(df, df_col_order)
 
     # delete all data from dynamodb
     delete_data_from_dynamodb(
@@ -218,7 +211,7 @@ def init_dynamodb(
     else:
         raise Exception("data_source is invalid")
 
-    print("init_dynamodb complete")
+    print("init train table in dynamodb complete")
     return None
 
 
@@ -243,7 +236,7 @@ if __name__ == "__main__":
     print("do you want to init dynamodb? data source is s3 (y/n)")
     if input() == "y":
         # init dynamodb s3
-        init_dynamodb(
+        init_train_table_dynamodb(
             tmp_dir,
             target_stock,
             stock_name,
@@ -262,7 +255,7 @@ if __name__ == "__main__":
 
     print("do you want to init dynamodb? data source is yfinance (y/n)")
     if input() == "y":
-        init_dynamodb(
+        init_train_table_dynamodb(
             tmp_dir,
             target_stock,
             stock_name,

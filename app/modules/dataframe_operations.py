@@ -26,6 +26,26 @@ def shift_dataFrame(df: pd.DataFrame, shift_rows: int) -> pd.DataFrame:
     return df_shifted
 
 
+def post_process_train_data_from_dynamodb(
+    df: pd.DataFrame,
+    df_col_order: list,
+) -> pd.DataFrame:
+    try:
+        # sort columns
+        df = df.reindex(columns=df_col_order)
+
+        # sort id
+        df = df.sort_values("id", ascending=True)
+
+        # reset index
+        df = df.reset_index(drop=True)
+    except Exception as e:
+        print(e)
+        raise Exception("fail to post process train data from dynamodb")
+
+    return df
+
+
 def get_updated_data(
     target_stock: str,
     interval: int,

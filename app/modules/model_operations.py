@@ -69,6 +69,7 @@ if __name__ == "__main__":
     import os
     from dotenv import load_dotenv
     from dynamodb_fetcher import get_data_from_dynamodb, upload_dynamodb
+    from dataframe_operations import post_process_train_data_from_dynamodb
 
     load_dotenv(dotenv_path="../../.env", override=True)
     df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
@@ -85,12 +86,12 @@ if __name__ == "__main__":
 
     # get train data
     df = get_data_from_dynamodb(
-        df_col_order,
         aws_region_name,
         aws_access_key_id,
         aws_secret_access_key,
         aws_dynamodb_train_table_name,
     )
+    df = post_process_train_data_from_dynamodb(df, df_col_order)
 
     # 予測したデータを格納するdfの作成
     df_predict = pd.DataFrame()
