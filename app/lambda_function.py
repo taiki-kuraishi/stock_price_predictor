@@ -1,7 +1,7 @@
 import os
 import json
 from dotenv import load_dotenv
-from modules.model_operations import train_model, make_predictions
+from modules.model_operations import init_and_retrain_model, make_predictions
 from modules.updater import get_updated_data, update_model_and_predict
 from modules.dynamodb_fetcher import (
     get_data_from_dynamodb,
@@ -77,7 +77,7 @@ def handler(event, context):
 
         # init model
         try:
-            model = train_model(df, predict_horizon)
+            model = init_and_retrain_model(df, predict_horizon)
         except Exception as e:
             print(e)
             return {
@@ -163,7 +163,7 @@ def handler(event, context):
         # 予測されていない時間を取得
 
         # modelの初期化と学習
-        model = train_model(df, predict_horizon)
+        model = init_and_retrain_model(df, predict_horizon)
 
         # 予測
         update_pred_df = make_predictions(model, update_df, predict_horizon)

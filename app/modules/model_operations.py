@@ -4,7 +4,9 @@ from preprocessing_for_prediction import shift_dataFrame, split_target_and_featu
 
 
 # モデルの学習
-def train_model(df: pd.DataFrame, predict_horizon: int) -> PassiveAggressiveRegressor:
+def init_and_retrain_model(
+    df: pd.DataFrame, predict_horizon: int
+) -> PassiveAggressiveRegressor:
     """
     init model
     modelの初期化と学習を行う
@@ -20,6 +22,29 @@ def train_model(df: pd.DataFrame, predict_horizon: int) -> PassiveAggressiveRegr
     model.fit(x, y)
 
     print("train model complete")
+    return model
+
+
+# 増分学習
+def incremental_learning(
+    model: PassiveAggressiveRegressor,
+    df: pd.DataFrame,
+    predict_horizon: int,
+) -> PassiveAggressiveRegressor:
+    """
+    incremental learning
+    増分学習を行う
+    """
+    # create shifted data for prediction
+    df = shift_dataFrame(df, predict_horizon)
+
+    # set target and explanatory variables
+    x, y = split_target_and_features(df)
+
+    # incremental learning
+    model.partial_fit(x, y)
+
+    print("incremental learning complete")
     return model
 
 
@@ -47,7 +72,6 @@ if __name__ == "__main__":
 
     load_dotenv(dotenv_path="../../.env", override=True)
     df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
-    predict_horizon: int = 1
     aws_region_name: str = os.getenv("AWS_REGION_NAME")
     aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -55,6 +79,9 @@ if __name__ == "__main__":
     aws_dynamo_prediction_table_name: str = os.getenv(
         "AWS_DYNAMODB_PREDICTION_TABLE_NAME"
     )
+
+    # modelの数
+    model_num = 3
 
     # get train data
     df = get_data_from_dynamodb(
@@ -65,18 +92,19 @@ if __name__ == "__main__":
         aws_dynamodb_train_table_name,
     )
 
-    # train model
-    model = train_model(df, predict_horizon)
-
-    # predict
-    y_predict = make_predictions(model, df)
-
-    # 新しいdfの作成
+    # 予測したデータを格納するdfの作成
     df_predict = pd.DataFrame()
     df_predict["datetime"] = df[["datetime"]]
 
-    # concat predict to df_predict
-    df_predict[f"{predict_horizon}_pred"] = y_predict
+    for i in range(1, model_num + 1):
+        # train model
+        model = init_and_retrain_model(df, i)
+
+        # predict
+        y_predict = make_predictions(model, df)
+
+        # concat predict to df_predict
+        df_predict[f"{i}_pred"] = y_predict
 
     print(df_predict)
 
