@@ -55,7 +55,7 @@ def post_process_train_data_from_dynamodb(
     return df
 
 
-def get_updated_data(
+def get_updated_train_data(
     target_stock: str,
     interval: int,
     df_col_order: list,
