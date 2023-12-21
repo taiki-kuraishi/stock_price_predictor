@@ -68,7 +68,7 @@ def make_predictions(
 if __name__ == "__main__":
     import os
     from dotenv import load_dotenv
-    from dynamodb_fetcher import get_data_from_dynamodb, upload_data_to_dynamodb
+    from dynamodb_fetcher import get_data_from_dynamodb, upload_dynamodb
 
     load_dotenv(dotenv_path="../../.env", override=True)
     df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     print(df_predict)
 
     # # upload to dynamodb
-    # upload_data_to_dynamodb(
+    # upload_dynamodb(
     #     aws_region_name,
     #     aws_access_key_id,
     #     aws_secret_access_key,

@@ -42,53 +42,6 @@ def get_data_from_dynamodb(
 
     return df
 
-
-def upload_data_to_dynamodb(
-    region_name: str,
-    access_key_id: str,
-    secret_access_key: str,
-    dynamodb_table_name: str,
-    df: pd.DataFrame,
-) -> None:
-    """
-    upload data to dynamodb
-    dynamodbにデータをアップロードする
-    """
-    dynamodb = boto3.client(
-        "dynamodb",
-        region_name=region_name,
-        aws_access_key_id=access_key_id,
-        aws_secret_access_key=secret_access_key,
-    )
-
-    if df["datetime"].dtype == "datetime64[ns]":
-        df["datetime"] = df["datetime"].dt.isoformat()
-
-    try:
-        for i in range(len(df)):
-            row = df.iloc[i].to_dict()
-            dynamodb_item = {
-                "id": {"N": str(row["id"])},
-                "datetime": {"S": row["datetime"]},
-                "open": {"N": str(row["open"])},
-                "high": {"N": str(row["high"])},
-                "low": {"N": str(row["low"])},
-                "close": {"N": str(row["close"])},
-                "adj_close": {"N": str(row["adj_close"])},
-                "volume": {"N": str(row["volume"])},
-            }
-            dynamodb.put_item(
-                TableName=dynamodb_table_name,
-                Item=dynamodb_item,
-            )
-            print(f"{i+1}件目のデータを追加しました。")
-    except Exception as e:
-        print(e)
-        raise Exception("fail to upload data to dynamodb")
-
-    return None
-
-
 def delete_data_from_dynamodb(
     region_name: str,
     access_key_id: str,
@@ -124,6 +77,50 @@ def delete_data_from_dynamodb(
     except Exception as e:
         print(e)
         raise Exception("fail to delete data from dynamodb")
+
+    return None
+
+
+def upload_dynamodb(
+    region_name: str,
+    access_key_id: str,
+    secret_access_key: str,
+    dynamodb_table_name: str,
+    df: pd.DataFrame,
+) -> None:
+    """
+    upload data to dynamodb
+    dynamodbに予測したデータをアップロードする
+    """
+    # instance of dynamodb
+    dynamodb = boto3.client(
+        "dynamodb",
+        region_name=region_name,
+        aws_access_key_id=access_key_id,
+        aws_secret_access_key=secret_access_key,
+    )
+
+    # if col datetime is type of datetime, convert to isoformat
+    if df["datetime"].dtype == "datetime64[ns]":
+        df["datetime"] = df["datetime"].dt.isoformat()
+
+    col_list = df.columns.tolist()
+
+    for i in range(len(df)):
+        row = df.iloc[i].to_dict()
+        dynamodb_item = {}
+
+        for col in col_list:
+            if col == "datetime":
+                dynamodb_item[str(col)] = {"S": row[col]}
+            else:
+                dynamodb_item[str(col)] = {"N": str(row[col])}
+
+        dynamodb.put_item(
+            TableName=dynamodb_table_name,
+            Item=dynamodb_item,
+        )
+        print(f"{i+1}件目のデータを追加しました。")
 
     return None
 
@@ -190,7 +187,7 @@ def init_dynamodb(
             raise Exception("fail to read csv")
 
         # upload data to dynamodb
-        upload_data_to_dynamodb(
+        upload_dynamodb(
             region_name,
             access_key_id,
             secret_access_key,
@@ -211,7 +208,7 @@ def init_dynamodb(
             raise Exception("fail to download data from yfinance")
 
         # upload data to dynamodb
-        upload_data_to_dynamodb(
+        upload_dynamodb(
             region_name,
             access_key_id,
             secret_access_key,
@@ -240,6 +237,7 @@ if __name__ == "__main__":
     aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
     aws_dynamodb_train_table_name: str = os.getenv("AWS_DYNAMODB_TRAIN_TABLE_NAME")
+    aws_dynamodb_pred_table_name: str = os.getenv("AWS_DYNAMODB_PREDICTION_TABLE_NAME")
     aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
 
     print("do you want to init dynamodb? data source is s3 (y/n)")
