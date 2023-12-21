@@ -1,6 +1,6 @@
 import pandas as pd
 from sklearn.linear_model import PassiveAggressiveRegressor
-from dataframe_operations import shift_dataFrame, split_target_and_features
+from .dataframe_operations import shift_dataFrame, split_target_and_features
 
 
 # モデルの学習
@@ -11,17 +11,20 @@ def init_and_retrain_model(
     init model
     modelの初期化と学習を行う
     """
-    # create shifted data for prediction
-    df = shift_dataFrame(df, predict_horizon)
+    try:
+        # create shifted data for prediction
+        df = shift_dataFrame(df, predict_horizon)
 
-    # set target and explanatory variables
-    x, y = split_target_and_features(df)
+        # set target and explanatory variables
+        x, y = split_target_and_features(df)
 
-    # model construction
-    model = PassiveAggressiveRegressor()
-    model.fit(x, y)
+        # model construction
+        model = PassiveAggressiveRegressor()
+        model.fit(x, y)
+    except Exception as e:
+        print(e)
+        raise Exception("fail to function on init_and_retrain_model")
 
-    print("train model complete")
     return model
 
 
@@ -35,16 +38,19 @@ def incremental_learning(
     incremental learning
     増分学習を行う
     """
-    # create shifted data for prediction
-    df = shift_dataFrame(df, predict_horizon)
+    try:
+        # create shifted data for prediction
+        df = shift_dataFrame(df, predict_horizon)
 
-    # set target and explanatory variables
-    x, y = split_target_and_features(df)
+        # set target and explanatory variables
+        x, y = split_target_and_features(df)
 
-    # incremental learning
-    model.partial_fit(x, y)
+        # incremental learning
+        model.partial_fit(x, y)
+    except Exception as e:
+        print(e)
+        raise Exception("fail to function on incremental_learning")
 
-    print("incremental learning complete")
     return model
 
 
@@ -56,19 +62,29 @@ def make_predictions(
     predict
     modelによる予測を行う
     """
-    # set target and explanatory variables
-    x, _ = split_target_and_features(df)
+    try:
+        # set target and explanatory variables
+        x, _ = split_target_and_features(df)
 
-    # predict
-    y_predict = model.predict(x)
+        # predict
+        y_predict = model.predict(x)
+    except Exception as e:
+        print(e)
+        raise Exception("fail to function on make_predictions")
 
     return y_predict
 
 
 if __name__ == "__main__":
+    """
+    dynamodbから学習用のデータをダウンロード
+    3つのモデルを使用
+    モデルの初期化と学習
+    モデルの予測
+    """
     import os
     from dotenv import load_dotenv
-    from dynamodb_fetcher import get_data_from_dynamodb, upload_dynamodb
+    from dynamodb_fetcher import get_data_from_dynamodb
     from dataframe_operations import post_process_train_data_from_dynamodb
 
     load_dotenv(dotenv_path="../../.env", override=True)
@@ -108,14 +124,5 @@ if __name__ == "__main__":
         df_predict[f"{i}_pred"] = y_predict
 
     print(df_predict)
-
-    # # upload to dynamodb
-    # upload_dynamodb(
-    #     aws_region_name,
-    #     aws_access_key_id,
-    #     aws_secret_access_key,
-    #     aws_dynamo_prediction_table_name,
-    #     df_predict,
-    # )
 
     print("model operation complete")

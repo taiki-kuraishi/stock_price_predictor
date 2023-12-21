@@ -5,11 +5,11 @@ from dotenv import load_dotenv
 from modules.model_operations import (
     init_and_retrain_model,
     make_predictions,
-    get_updated_dataFrame,
 )
 from modules.dynamodb_fetcher import (
     get_data_from_dynamodb,
     upload_dynamodb,
+    delete_data_from_dynamodb,
     init_train_table_dynamodb,
 )
 from modules.s3_fetcher import (
@@ -28,7 +28,7 @@ def handler(event, context):
     period: str = os.getenv("PERIOD")
     interval: str = os.getenv("INTERVAL")
     df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
-    model_num: int = os.getenv("MODEL_NUM")
+    model_num: int = int(os.getenv("MODEL_NUM"))
     aws_region_name: str = os.getenv("AWS_REGION_NAME")
     aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -136,13 +136,58 @@ def handler(event, context):
 
     # init pred table
     elif event["handler"] == "delete_pred_table_item":
-        ...
+        try:
+            # pred tableからすべてのitemを取得
+            df = get_data_from_dynamodb(
+                aws_region_name,
+                aws_access_key_id,
+                aws_secret_access_key,
+                aws_dynamo_prediction_table_name,
+            )
+
+            if df.empty:
+                print("no item in pred table")
+                return {
+                    "statusCode": 200,
+                    "body": json.dumps(
+                        {
+                            "message": "no item in pred table",
+                        }
+                    ),
+                }
+
+            # pred tableからすべてのitemを削除
+            delete_data_from_dynamodb(
+                aws_region_name,
+                aws_access_key_id,
+                aws_secret_access_key,
+                aws_dynamo_prediction_table_name,
+                df,
+            )
+        except Exception as e:
+            print(e)
+            return {
+                "statusCode": 500,
+                "body": json.dumps(
+                    {
+                        "message": "fail to delete all item in pred table",
+                    }
+                ),
+            }
+        return {
+            "statusCode": 200,
+            "body": json.dumps(
+                {
+                    "message": "success to delete all item in pred table",
+                }
+            ),
+        }
+
     # init model
     elif event["handler"] == "init_model":
         try:
             # download data from dynamodb
             df = get_data_from_dynamodb(
-                df_col_order,
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
@@ -158,7 +203,7 @@ def handler(event, context):
                 # model to .pkl
                 dump(
                     model,
-                    f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl",
+                    f"{tmp_dir}/spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl",
                 )
 
                 # upload model to s3
@@ -206,5 +251,5 @@ def handler(event, context):
 
 
 if __name__ == "__main__":
-    handler({"handler": "init"}, None)
-    handler({"handler": "update"}, None)
+    # handler({"handler": "delete_pred_table_item"}, None)
+    handler({"handler": "init_model"}, None)

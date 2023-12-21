@@ -1,7 +1,7 @@
 import boto3
 import pandas as pd
-from yfinance_fetcher import get_all_from_yfinance
-from dataframe_operations import post_process_train_data_from_dynamodb
+from .yfinance_fetcher import get_all_from_yfinance
+from .dataframe_operations import post_process_train_data_from_dynamodb
 
 
 def get_data_from_dynamodb(
@@ -14,22 +14,26 @@ def get_data_from_dynamodb(
     get data from dynamodb
     dynamodbからデータを取得する
     """
-    dynamodb = boto3.resource(
-        "dynamodb",
-        region_name=region_name,
-        aws_access_key_id=access_key_id,
-        aws_secret_access_key=secret_access_key,
-    )
-
-    table = dynamodb.Table(dynamodb_table_name)
-
     try:
-        response = table.scan()
+        dynamodb = boto3.resource(
+            "dynamodb",
+            region_name=region_name,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+        )
+
+        table = dynamodb.Table(dynamodb_table_name)
+
+        try:
+            response = table.scan()
+        except Exception as e:
+            print(e)
+            raise Exception("fail to get data from dynamodb")
+
+        df = pd.DataFrame(response["Items"])
     except Exception as e:
         print(e)
-        raise Exception("fail to get data from dynamodb")
-
-    df = pd.DataFrame(response["Items"])
+        raise Exception("fail to function on get_data_from_dynamodb")
 
     return df
 
@@ -45,17 +49,18 @@ def delete_data_from_dynamodb(
     delete data from dynamodb
     dynamodbからデータを削除する
     """
-    dynamodb = boto3.client(
-        "dynamodb",
-        region_name=region_name,
-        aws_access_key_id=access_key_id,
-        aws_secret_access_key=secret_access_key,
-    )
-
-    # if col datetime is type of datetime, convert to isoformat
-    if df["datetime"].dtype == "datetime64[ns]":
-        df["datetime"] = df["datetime"].dt.isoformat()
     try:
+        dynamodb = boto3.client(
+            "dynamodb",
+            region_name=region_name,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+        )
+
+        # if col datetime is type of datetime, convert to isoformat
+        if df["datetime"].dtype == "datetime64[ns]":
+            df["datetime"] = df["datetime"].dt.isoformat()
+
         for i in range(len(df)):
             row = df.iloc[i].to_dict()
             dynamodb.delete_item(
@@ -68,7 +73,7 @@ def delete_data_from_dynamodb(
             print(f"{i+1}件目のデータを削除しました。")
     except Exception as e:
         print(e)
-        raise Exception("fail to delete data from dynamodb")
+        raise Exception("fail to function on delete_data_from_dynamodb")
 
     return None
 
@@ -84,35 +89,39 @@ def upload_dynamodb(
     upload data to dynamodb
     dynamodbに予測したデータをアップロードする
     """
-    # instance of dynamodb
-    dynamodb = boto3.client(
-        "dynamodb",
-        region_name=region_name,
-        aws_access_key_id=access_key_id,
-        aws_secret_access_key=secret_access_key,
-    )
-
-    # if col datetime is type of datetime, convert to isoformat
-    if df["datetime"].dtype == "datetime64[ns]":
-        df["datetime"] = df["datetime"].dt.isoformat()
-
-    col_list = df.columns.tolist()
-
-    for i in range(len(df)):
-        row = df.iloc[i].to_dict()
-        dynamodb_item = {}
-
-        for col in col_list:
-            if col == "datetime":
-                dynamodb_item[str(col)] = {"S": row[col]}
-            else:
-                dynamodb_item[str(col)] = {"N": str(row[col])}
-
-        dynamodb.put_item(
-            TableName=dynamodb_table_name,
-            Item=dynamodb_item,
+    try:
+        # instance of dynamodb
+        dynamodb = boto3.client(
+            "dynamodb",
+            region_name=region_name,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
         )
-        print(f"{i+1}件目のデータを追加しました。")
+
+        # if col datetime is type of datetime, convert to isoformat
+        if df["datetime"].dtype == "datetime64[ns]":
+            df["datetime"] = df["datetime"].dt.isoformat()
+
+        col_list = df.columns.tolist()
+
+        for i in range(len(df)):
+            row = df.iloc[i].to_dict()
+            dynamodb_item = {}
+
+            for col in col_list:
+                if col == "datetime":
+                    dynamodb_item[str(col)] = {"S": row[col]}
+                else:
+                    dynamodb_item[str(col)] = {"N": str(row[col])}
+
+            dynamodb.put_item(
+                TableName=dynamodb_table_name,
+                Item=dynamodb_item,
+            )
+            print(f"{i+1}件目のデータを追加しました。")
+    except Exception as e:
+        print(e)
+        raise Exception("fail to function on upload_dynamodb")
 
     return None
 
@@ -135,87 +144,95 @@ def init_train_table_dynamodb(
     init dynamodb
     dynamodbを初期化する
     """
-
-    # get all data from dynamodb
-    df = get_data_from_dynamodb(
-        region_name,
-        access_key_id,
-        secret_access_key,
-        dynamodb_table_name,
-    )
-
-    df = post_process_train_data_from_dynamodb(df, df_col_order)
-
-    # delete all data from dynamodb
-    delete_data_from_dynamodb(
-        region_name,
-        access_key_id,
-        secret_access_key,
-        dynamodb_table_name,
-        df,
-    )
-
-    if data_source == "s3":
-        # download csv from s3
-        s3 = boto3.client(
-            "s3",
-            region_name=region_name,
-            aws_access_key_id=access_key_id,
-            aws_secret_access_key=secret_access_key,
+    try:
+        # get all data from dynamodb
+        df = get_data_from_dynamodb(
+            region_name,
+            access_key_id,
+            secret_access_key,
+            dynamodb_table_name,
         )
-        file_name = f"spp_{stock_name}_{period}_{interval}.csv"
-        try:
-            s3.download_file(
-                s3_bucket_name, f"csv/{file_name}", f"{tmp_dir}/{file_name}"
-            )
-        except Exception as e:
-            print(e)
-            raise Exception("fail to download csv from s3")
 
-        # read csv
-        try:
-            df = pd.read_csv(f"{tmp_dir}/{file_name}", encoding="utf-8", index_col=None)
-        except Exception as e:
-            print(e)
-            raise Exception("fail to read csv")
+        df = post_process_train_data_from_dynamodb(df, df_col_order)
 
-        # upload data to dynamodb
-        upload_dynamodb(
+        # delete all data from dynamodb
+        delete_data_from_dynamodb(
             region_name,
             access_key_id,
             secret_access_key,
             dynamodb_table_name,
             df,
         )
-    elif data_source == "yfinance":
-        # download data from yfinance
-        try:
-            df = get_all_from_yfinance(
-                target_stock,
-                period,
-                interval,
-                df_col_order,
+
+        if data_source == "s3":
+            # download csv from s3
+            s3 = boto3.client(
+                "s3",
+                region_name=region_name,
+                aws_access_key_id=access_key_id,
+                aws_secret_access_key=secret_access_key,
             )
-        except Exception as e:
-            print(e)
-            raise Exception("fail to download data from yfinance")
+            file_name = f"spp_{stock_name}_{period}_{interval}.csv"
+            try:
+                s3.download_file(
+                    s3_bucket_name, f"csv/{file_name}", f"{tmp_dir}/{file_name}"
+                )
+            except Exception as e:
+                print(e)
+                raise Exception("fail to download csv from s3")
 
-        # upload data to dynamodb
-        upload_dynamodb(
-            region_name,
-            access_key_id,
-            secret_access_key,
-            dynamodb_table_name,
-            df,
-        )
-    else:
-        raise Exception("data_source is invalid")
+            # read csv
+            try:
+                df = pd.read_csv(
+                    f"{tmp_dir}/{file_name}", encoding="utf-8", index_col=None
+                )
+            except Exception as e:
+                print(e)
+                raise Exception("fail to read csv")
 
-    print("init train table in dynamodb complete")
+            # upload data to dynamodb
+            upload_dynamodb(
+                region_name,
+                access_key_id,
+                secret_access_key,
+                dynamodb_table_name,
+                df,
+            )
+        elif data_source == "yfinance":
+            # download data from yfinance
+            try:
+                df = get_all_from_yfinance(
+                    target_stock,
+                    period,
+                    interval,
+                    df_col_order,
+                )
+            except Exception as e:
+                print(e)
+                raise Exception("fail to download data from yfinance")
+
+            # upload data to dynamodb
+            upload_dynamodb(
+                region_name,
+                access_key_id,
+                secret_access_key,
+                dynamodb_table_name,
+                df,
+            )
+        else:
+            raise Exception("data_source is invalid")
+    except Exception as e:
+        print(e)
+        raise Exception("fail to function on init_train_table_dynamodb")
+
     return None
 
 
 if __name__ == "__main__":
+    """
+    dynamodbのtrainテーブルをs3に格納されたデータを使用して初期化する
+    dynamodbのtrainテーブルをyfinanceに格納されたデータを使用して初期化する
+    """
     import os
     from dotenv import load_dotenv
 

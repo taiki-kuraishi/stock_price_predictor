@@ -92,6 +92,10 @@ def get_data_for_period_from_yfinance(
 
 
 if __name__ == "__main__":
+    """
+    yfinanceから取得可能なすべてのデータを取得する
+    yfinanceから今日のデータを取得する
+    """
     import os
     from datetime import datetime, timedelta
     from dotenv import load_dotenv

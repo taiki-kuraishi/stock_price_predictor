@@ -12,32 +12,39 @@ def download_model_from_s3(
     aws_secret_access_key: str,
     aws_s3_bucket_name: str,
 ) -> PassiveAggressiveRegressor:
-    # model file name
-    model_file_name = (
-        f"spp_{stock_name}_{str(predict_horizon)}h_PassiveAggressiveRegressor.pkl"
-    )
-    model_local_path = f"{tmp_dir}/{model_file_name}"
-
-    s3 = boto3.client(
-        "s3",
-        region_name=aws_region_name,
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
-    )
-
+    """
+    download model data from s3
+    """
     try:
-        s3.download_file(
-            aws_s3_bucket_name, f"models/{model_file_name}", model_local_path
+        # model file name
+        model_file_name = (
+            f"spp_{stock_name}_{str(predict_horizon)}h_PassiveAggressiveRegressor.pkl"
         )
-    except Exception as e:
-        print(e)
-        raise Exception("fail to download model from s3")
+        model_local_path = f"{tmp_dir}/{model_file_name}"
 
-    try:
-        model = load(model_local_path)
+        s3 = boto3.client(
+            "s3",
+            region_name=aws_region_name,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+        )
+
+        try:
+            s3.download_file(
+                aws_s3_bucket_name, f"models/{model_file_name}", model_local_path
+            )
+        except Exception as e:
+            print(e)
+            raise Exception("fail to download model from s3 on download_model_from_s3")
+
+        try:
+            model = load(model_local_path)
+        except Exception as e:
+            print(e)
+            raise Exception("fail to load model on download_model_from_s3")
     except Exception as e:
         print(e)
-        raise Exception("fail to load model")
+        raise Exception("fail to function on download_model_from_s3")
 
     return model
 
@@ -52,38 +59,51 @@ def upload_model_to_s3(
     aws_secret_access_key: str,
     aws_s3_bucket_name: str,
 ) -> None:
-    # model file name
-    model_file_name = (
-        f"spp_{stock_name}_{str(predict_horizon)}h_PassiveAggressiveRegressor.pkl"
-    )
-    model_local_path = f"{tmp_dir}/{model_file_name}"
-
-    # model to .pkl
+    """
+    upload model data to s3
+    モデルを受け取って.pklにしてs3にアップロードする
+    """
     try:
-        dump(model, model_local_path)
-    except Exception as e:
-        print(e)
-        raise Exception("fail to dump model")
-
-    s3 = boto3.client(
-        "s3",
-        region_name=aws_region_name,
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
-    )
-
-    try:
-        s3.upload_file(
-            model_local_path, aws_s3_bucket_name, f"models/{model_file_name}"
+        # model file name
+        model_file_name = (
+            f"spp_{stock_name}_{str(predict_horizon)}h_PassiveAggressiveRegressor.pkl"
         )
+        model_local_path = f"{tmp_dir}/{model_file_name}"
+
+        # model to .pkl
+        try:
+            dump(model, model_local_path)
+        except Exception as e:
+            print(e)
+            raise Exception("fail to dump model on upload_model_to_s3")
+
+        s3 = boto3.client(
+            "s3",
+            region_name=aws_region_name,
+            aws_access_key_id=aws_access_key_id,
+            aws_secret_access_key=aws_secret_access_key,
+        )
+
+        try:
+            s3.upload_file(
+                model_local_path, aws_s3_bucket_name, f"models/{model_file_name}"
+            )
+        except Exception as e:
+            print(e)
+            raise Exception("fail to upload model to s3 on upload_model_to_s3")
     except Exception as e:
         print(e)
-        raise Exception("fail to upload model to s3")
+        raise Exception("fail to function on upload_model_to_s3")
 
     return None
 
 
 if __name__ == "__main__":
+    """
+    初期化されたモデルを作成
+    s3にアップロード
+    s3からダウンロード
+    """
     import os
     from dotenv import load_dotenv
 
