@@ -108,3 +108,17 @@ def get_updated_train_data(
         raise Exception("fail to function on get_updated_data")
 
     return update_df
+
+
+def get_unpredicted_data(
+    pred_df: pd.DataFrame,
+    stock_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    dynamodbのpred tableに保存されていない(予測されていない)データを予測するための説明変数(dataFrame)を取得する
+    """
+    mask = stock_df["datetime"].isin(pred_df["datetime"])
+
+    unpredicted_df = stock_df[~mask]
+
+    return unpredicted_df
