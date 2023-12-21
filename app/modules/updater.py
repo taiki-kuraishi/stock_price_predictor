@@ -1,9 +1,7 @@
-import joblib
 import pandas as pd
 from datetime import datetime
 from datetime import timedelta
-from .preprocessing_for_prediction import split_target_and_features, shift_dataFrame
-from .yfinance_fetcher import get_data_for_period_from_yfinance
+from yfinance_fetcher import get_data_for_period_from_yfinance
 
 
 def get_updated_data(
@@ -14,7 +12,8 @@ def get_updated_data(
 ) -> pd.DataFrame | None:
     """
     update model and predict
-    modelを更新して予測する
+    dynamodbに保存されているデータの最終更新日時をもとに、新たにデータを取得する
+    新たなデータがない場合は、Noneを返す
     """
 
     # get last_updated_datetime YYYY-MM-DD HH:MM:SS
@@ -54,4 +53,3 @@ def get_updated_data(
     print("update rows: " + str(update_rows))
 
     return update_df
-
