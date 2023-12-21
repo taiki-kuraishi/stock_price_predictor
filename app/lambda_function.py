@@ -2,8 +2,11 @@ import os
 import json
 from joblib import dump, load
 from dotenv import load_dotenv
-from modules.model_operations import init_and_retrain_model, make_predictions
-from modules.updater import get_updated_data, update_model_and_predict
+from modules.model_operations import (
+    init_and_retrain_model,
+    make_predictions,
+    get_updated_dataFrame,
+)
 from modules.dynamodb_fetcher import (
     get_data_from_dynamodb,
     upload_dynamodb,
@@ -56,8 +59,8 @@ def handler(event, context):
             ),
         }
 
-    # init dynamodb
-    if event["handler"] == "init_dynamodb_from_s3":
+    # init train table
+    if event["handler"] == "init_train_table_from_s3":
         # init dynamodb s3
         try:
             init_dynamodb(
@@ -93,7 +96,7 @@ def handler(event, context):
                 }
             ),
         }
-    elif event["handler"] == "init_dynamodb_from_yfinance":
+    elif event["handler"] == "init_train_table_from_yfinance":
         # init dynamodb yfinance
         try:
             init_dynamodb(
@@ -130,6 +133,9 @@ def handler(event, context):
             ),
         }
 
+    # init pred table
+    elif event["handler"] == "delete_pred_table_item":
+        ...
     # init model
     elif event["handler"] == "init_model":
         try:
@@ -183,6 +189,7 @@ def handler(event, context):
         }
 
     # update predict
+    # elif event["handler"] == "update_predict":
     # update model
     elif event["handler"] == "init":
         # download data from dynamodb
@@ -254,7 +261,7 @@ def handler(event, context):
         )
 
         # データベースの最終更新日時をもとに、新たにデータを取得
-        update_df = get_updated_data(
+        update_df = get_updated_dataFrame(
             target_stock,
             interval,
             df_col_order,

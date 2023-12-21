@@ -1,6 +1,6 @@
 import pandas as pd
 from sklearn.linear_model import PassiveAggressiveRegressor
-from preprocessing_for_prediction import shift_dataFrame, split_target_and_features
+from dataframe_operations import shift_dataFrame, split_target_and_features
 
 
 # モデルの学習
