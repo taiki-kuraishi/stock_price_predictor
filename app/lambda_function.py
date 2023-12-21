@@ -1,5 +1,6 @@
 import os
 import json
+import pandas as pd
 from joblib import dump, load
 from dotenv import load_dotenv
 from modules.model_operations import (
@@ -16,7 +17,10 @@ from modules.s3_fetcher import (
     download_model_from_s3,
     upload_model_to_s3,
 )
-from modules.dataframe_operations import post_process_train_data_from_dynamodb
+from modules.dataframe_operations import (
+    post_process_train_data_from_dynamodb,
+    get_unpredicted_data,
+)
 
 
 def handler(event, context):
@@ -134,7 +138,7 @@ def handler(event, context):
             ),
         }
 
-    # init pred table
+    # delete all item in pred table
     elif event["handler"] == "delete_pred_table_item":
         try:
             # pred tableからすべてのitemを取得
@@ -237,7 +241,100 @@ def handler(event, context):
         }
 
     # update predict
-    # elif event["handler"] == "update_predict":
+    elif event["handler"] == "update_predict":
+        try:
+            # get all item from stock table
+            stock_df = get_data_from_dynamodb(
+                aws_region_name,
+                aws_access_key_id,
+                aws_secret_access_key,
+                aws_dynamodb_train_table_name,
+            )
+
+            # post process get data from dynamodb
+            stock_df = post_process_train_data_from_dynamodb(stock_df, df_col_order)
+
+            # get all item from pred table
+            pred_df = get_data_from_dynamodb(
+                aws_region_name,
+                aws_access_key_id,
+                aws_secret_access_key,
+                aws_dynamo_prediction_table_name,
+            )
+
+            #まだ予測していないデータを取得
+            unpredicted_df = get_unpredicted_data(pred_df, stock_df)
+
+            # unpredicted_dfが空の場合は、予測するデータがないので、終了
+            if unpredicted_df.empty:
+                print("no data to predict")
+                return {
+                    "statusCode": 200,
+                    "body": json.dumps(
+                        {
+                            "message": "no data to predict",
+                        }
+                    ),
+                }
+
+            # model download from s3
+            models = {}
+            for i in range(1, model_num + 1):
+                models[i] = download_model_from_s3(
+                    tmp_dir,
+                    stock_name,
+                    i,
+                    aws_region_name,
+                    aws_access_key_id,
+                    aws_secret_access_key,
+                    aws_s3_bucket_name,
+                )
+
+            #新たに予測したデータを格納するdfの作成
+            update_pred_df = pd.DataFrame()
+            update_pred_df["datetime"] = unpredicted_df[["datetime"]]
+
+            #predict
+            for key in models.keys():
+                # predict
+                y_predict = make_predictions(models[key], unpredicted_df)
+
+                # concat predict to unpredicted_df
+                update_pred_df[f"{key}_pred"] = y_predict
+
+            #unpredicted_dfから最も大きいidを取得
+            max_id = int(unpredicted_df["id"].max())
+
+            #update_pred_dfにid列を追加
+            update_pred_df["id"] = range(max_id + 1, max_id + 1 + len(update_pred_df))
+
+            #update_pred_dfをs3のpred tableにアップロード
+            upload_dynamodb(
+                aws_region_name,
+                aws_access_key_id,
+                aws_secret_access_key,
+                aws_dynamo_prediction_table_name,
+                update_pred_df,
+            )
+
+        except Exception as e:
+            print(e)
+            return {
+                "statusCode": 500,
+                "body": json.dumps(
+                    {
+                        "message": "fail to update predict",
+                    }
+                ),
+            }
+        return {
+            "statusCode": 200,
+            "body": json.dumps(
+                {
+                    "message": "success to update predict",
+                }
+            ),
+        }
     # update model
     else:
         return {
@@ -252,4 +349,5 @@ def handler(event, context):
 
 if __name__ == "__main__":
     # handler({"handler": "delete_pred_table_item"}, None)
-    handler({"handler": "init_model"}, None)
+    # handler({"handler": "init_model"}, None)
+    handler({"handler": "update_predict"}, None)
