@@ -18,7 +18,7 @@ from modules.s3_fetcher import (
     upload_model_to_s3,
 )
 from modules.dataframe_operations import (
-    post_process_train_data_from_dynamodb,
+    post_process_stock_data_from_dynamodb,
     get_unpredicted_data,
 )
 
@@ -32,16 +32,30 @@ def handler(event, context):
     period: str = os.getenv("PERIOD")
     interval: str = os.getenv("INTERVAL")
     df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
-    model_num: int = int(os.getenv("MODEL_NUM"))
+    model_num = int(os.getenv("MODEL_NUM"))
     aws_region_name: str = os.getenv("AWS_REGION_NAME")
     aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
     aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
     dynamodb_stock_table_name = "spp_" + stock_name
-    dynamodb_train_table_name: str = "spp_" + stock_name + "_train"
-    dynamo_prediction_table_name: str = "spp_" + stock_name + "_pred"
+    dynamodb_train_table_name: str = "spp_" + stock_name + "_trained"
+    dynamo_pred_table_name: str = "spp_" + stock_name + "_pred"
     # check env
-    if not all([tmp_dir, target_stock, stock_name, period, interval]):
+    if not all(
+        [
+            tmp_dir,
+            target_stock,
+            stock_name,
+            period,
+            interval,
+            df_col_order,
+            model_num,
+            aws_region_name,
+            aws_access_key_id,
+            aws_secret_access_key,
+            aws_s3_bucket_name,
+        ]
+    ):
         return {
             "statusCode": 500,
             "body": json.dumps(
@@ -63,7 +77,7 @@ def handler(event, context):
         }
 
     # init train table
-    if event["handler"] == "init_train_table_from_s3":
+    if event["handler"] == "init_stock_table_from_s3":
         # init dynamodb s3
         try:
             init_train_table_dynamodb(
@@ -99,7 +113,7 @@ def handler(event, context):
                 }
             ),
         }
-    elif event["handler"] == "init_train_table_from_yfinance":
+    elif event["handler"] == "init_stock_table_from_yfinance":
         # init dynamodb yfinance
         try:
             init_train_table_dynamodb(
@@ -144,7 +158,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                dynamo_prediction_table_name,
+                dynamo_pred_table_name,
             )
 
             if df.empty:
@@ -163,7 +177,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                dynamo_prediction_table_name,
+                dynamo_pred_table_name,
                 df,
             )
         except Exception as e:
@@ -189,18 +203,18 @@ def handler(event, context):
     elif event["handler"] == "init_model":
         try:
             # download data from dynamodb
-            df = get_data_from_dynamodb(
+            train_df = get_data_from_dynamodb(
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
                 dynamodb_stock_table_name,
             )
 
-            df = post_process_train_data_from_dynamodb(df, df_col_order)
+            train_df = post_process_stock_data_from_dynamodb(train_df, df_col_order)
 
             for i in range(1, model_num + 1):
                 # init and retrain model
-                model = init_and_retrain_model(df, i)
+                model = init_and_retrain_model(train_df, i)
 
                 # model to .pkl
                 dump(
@@ -219,6 +233,34 @@ def handler(event, context):
                     aws_secret_access_key,
                     aws_s3_bucket_name,
                 )
+
+            # delete all item from train table
+            # get all data from dynamodb
+            df_to_delete = get_data_from_dynamodb(
+                aws_region_name,
+                aws_access_key_id,
+                aws_secret_access_key,
+                dynamodb_train_table_name,
+            )
+
+            if not df_to_delete.empty:
+                # delete all data from dynamodb
+                delete_data_from_dynamodb(
+                    aws_region_name,
+                    aws_access_key_id,
+                    aws_secret_access_key,
+                    dynamodb_train_table_name,
+                    df_to_delete,
+                )
+
+            # upload train data to dynamodb
+            upload_dynamodb(
+                aws_region_name,
+                aws_access_key_id,
+                aws_secret_access_key,
+                dynamodb_train_table_name,
+                train_df,
+            )
         except Exception as e:
             print(e)
             return {
@@ -238,7 +280,7 @@ def handler(event, context):
             ),
         }
 
-    #update stock table
+    # update stock table
 
     # update predict table
     elif event["handler"] == "update_predict":
@@ -252,17 +294,17 @@ def handler(event, context):
             )
 
             # post process get data from dynamodb
-            stock_df = post_process_train_data_from_dynamodb(stock_df, df_col_order)
+            stock_df = post_process_stock_data_from_dynamodb(stock_df, df_col_order)
 
             # get all item from pred table
             pred_df = get_data_from_dynamodb(
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                dynamo_prediction_table_name,
+                dynamo_pred_table_name,
             )
 
-            #まだ予測していないデータを取得
+            # まだ予測していないデータを取得
             unpredicted_df = get_unpredicted_data(pred_df, stock_df)
 
             # unpredicted_dfが空の場合は、予測するデータがないので、終了
@@ -290,11 +332,11 @@ def handler(event, context):
                     aws_s3_bucket_name,
                 )
 
-            #新たに予測したデータを格納するdfの作成
+            # 新たに予測したデータを格納するdfの作成
             update_pred_df = pd.DataFrame()
             update_pred_df["datetime"] = unpredicted_df[["datetime"]]
 
-            #predict
+            # predict
             for key in models.keys():
                 # predict
                 y_predict = make_predictions(models[key], unpredicted_df)
@@ -302,18 +344,18 @@ def handler(event, context):
                 # concat predict to unpredicted_df
                 update_pred_df[f"{key}_pred"] = y_predict
 
-            #unpredicted_dfから最も大きいidを取得
+            # unpredicted_dfから最も大きいidを取得
             max_id = int(unpredicted_df["id"].max())
 
-            #update_pred_dfにid列を追加
+            # update_pred_dfにid列を追加
             update_pred_df["id"] = range(max_id + 1, max_id + 1 + len(update_pred_df))
 
-            #update_pred_dfをs3のpred tableにアップロード
+            # update_pred_dfをs3のpred tableにアップロード
             upload_dynamodb(
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                dynamo_prediction_table_name,
+                dynamo_pred_table_name,
                 update_pred_df,
             )
 
@@ -335,6 +377,7 @@ def handler(event, context):
                 }
             ),
         }
+
     # update model
     else:
         return {
@@ -349,5 +392,5 @@ def handler(event, context):
 
 if __name__ == "__main__":
     # handler({"handler": "delete_pred_table_item"}, None)
-    # handler({"handler": "init_model"}, None)
-    handler({"handler": "update_predict"}, None)
+    handler({"handler": "init_model"}, None)
+    # handler({"handler": "update_predict"}, None)

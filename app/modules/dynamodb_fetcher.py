@@ -1,7 +1,7 @@
 import boto3
 import pandas as pd
 from .yfinance_fetcher import get_all_from_yfinance
-from .dataframe_operations import post_process_train_data_from_dynamodb
+from .dataframe_operations import post_process_stock_data_from_dynamodb
 
 
 def get_data_from_dynamodb(
@@ -126,7 +126,7 @@ def upload_dynamodb(
     return None
 
 
-def init_train_table_dynamodb(
+def init_stock_table_dynamodb(
     tmp_dir: str,
     target_stock: str,
     stock_name: str,
@@ -153,7 +153,7 @@ def init_train_table_dynamodb(
             dynamodb_table_name,
         )
 
-        df = post_process_train_data_from_dynamodb(df, df_col_order)
+        df = post_process_stock_data_from_dynamodb(df, df_col_order)
 
         # delete all data from dynamodb
         delete_data_from_dynamodb(
@@ -223,15 +223,15 @@ def init_train_table_dynamodb(
             raise Exception("data_source is invalid")
     except Exception as e:
         print(e)
-        raise Exception("fail to function on init_train_table_dynamodb")
+        raise Exception("fail to function on init_stock_table_dynamodb")
 
     return None
 
 
 if __name__ == "__main__":
     """
-    dynamodbのtrainテーブルをs3に格納されたデータを使用して初期化する
-    dynamodbのtrainテーブルをyfinanceに格納されたデータを使用して初期化する
+    dynamodbのstockテーブルをs3に格納されたデータを使用して初期化する
+    dynamodbのstockテーブルをyfinanceに格納されたデータを使用して初期化する
     """
     import os
     from dotenv import load_dotenv
@@ -246,14 +246,13 @@ if __name__ == "__main__":
     aws_region_name: str = os.getenv("AWS_REGION_NAME")
     aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_dynamodb_train_table_name: str = os.getenv("AWS_DYNAMODB_TRAIN_TABLE_NAME")
-    aws_dynamodb_pred_table_name: str = os.getenv("AWS_DYNAMODB_PREDICTION_TABLE_NAME")
+    dynamodb_stock_table_name = "spp_" + stock_name
     aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
 
     print("do you want to init dynamodb? data source is s3 (y/n)")
     if input() == "y":
         # init dynamodb s3
-        init_train_table_dynamodb(
+        init_stock_table_dynamodb(
             tmp_dir,
             target_stock,
             stock_name,
@@ -263,7 +262,7 @@ if __name__ == "__main__":
             aws_region_name,
             aws_access_key_id,
             aws_secret_access_key,
-            aws_dynamodb_train_table_name,
+            dynamodb_stock_table_name,
             aws_s3_bucket_name,
             "s3",
         )
@@ -272,7 +271,7 @@ if __name__ == "__main__":
 
     print("do you want to init dynamodb? data source is yfinance (y/n)")
     if input() == "y":
-        init_train_table_dynamodb(
+        init_stock_table_dynamodb(
             tmp_dir,
             target_stock,
             stock_name,
@@ -282,7 +281,7 @@ if __name__ == "__main__":
             aws_region_name,
             aws_access_key_id,
             aws_secret_access_key,
-            aws_dynamodb_train_table_name,
+            dynamodb_stock_table_name,
             aws_s3_bucket_name,
             "yfinance",
         )

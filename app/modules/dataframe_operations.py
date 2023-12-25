@@ -35,7 +35,7 @@ def shift_dataFrame(df: pd.DataFrame, shift_rows: int) -> pd.DataFrame:
     return df_shifted
 
 
-def post_process_train_data_from_dynamodb(
+def post_process_stock_data_from_dynamodb(
     df: pd.DataFrame,
     df_col_order: list,
 ) -> pd.DataFrame:

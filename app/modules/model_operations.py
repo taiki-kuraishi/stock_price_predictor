@@ -85,29 +85,27 @@ if __name__ == "__main__":
     import os
     from dotenv import load_dotenv
     from dynamodb_fetcher import get_data_from_dynamodb
-    from dataframe_operations import post_process_train_data_from_dynamodb
+    from dataframe_operations import post_process_stock_data_from_dynamodb
 
     load_dotenv(dotenv_path="../../.env", override=True)
+    stock_name: str = os.getenv("STOCK_NAME")
     df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
     aws_region_name: str = os.getenv("AWS_REGION_NAME")
     aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_dynamodb_train_table_name: str = os.getenv("AWS_DYNAMODB_TRAIN_TABLE_NAME")
-    aws_dynamo_prediction_table_name: str = os.getenv(
-        "AWS_DYNAMODB_PREDICTION_TABLE_NAME"
-    )
+    dynamodb_stock_table_name = "spp_" + stock_name
 
     # modelの数
     model_num = 3
 
-    # get train data
+    # get stock data
     df = get_data_from_dynamodb(
         aws_region_name,
         aws_access_key_id,
         aws_secret_access_key,
-        aws_dynamodb_train_table_name,
+        dynamodb_stock_table_name,
     )
-    df = post_process_train_data_from_dynamodb(df, df_col_order)
+    df = post_process_stock_data_from_dynamodb(df, df_col_order)
 
     # 予測したデータを格納するdfの作成
     df_predict = pd.DataFrame()
