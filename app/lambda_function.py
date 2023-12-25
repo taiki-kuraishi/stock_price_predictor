@@ -37,11 +37,9 @@ def handler(event, context):
     aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
     aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
-    aws_dynamodb_train_table_name: str = os.getenv("AWS_DYNAMODB_TRAIN_TABLE_NAME")
-    aws_dynamo_prediction_table_name: str = os.getenv(
-        "AWS_DYNAMODB_PREDICTION_TABLE_NAME"
-    )
-
+    dynamodb_stock_table_name = "spp_" + stock_name
+    dynamodb_train_table_name: str = "spp_" + stock_name + "_train"
+    dynamo_prediction_table_name: str = "spp_" + stock_name + "_pred"
     # check env
     if not all([tmp_dir, target_stock, stock_name, period, interval]):
         return {
@@ -78,7 +76,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                aws_dynamodb_train_table_name,
+                dynamodb_stock_table_name,
                 aws_s3_bucket_name,
                 "s3",
             )
@@ -114,7 +112,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                aws_dynamodb_train_table_name,
+                dynamodb_stock_table_name,
                 aws_s3_bucket_name,
                 "yfinance",
             )
@@ -146,7 +144,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                aws_dynamo_prediction_table_name,
+                dynamo_prediction_table_name,
             )
 
             if df.empty:
@@ -165,7 +163,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                aws_dynamo_prediction_table_name,
+                dynamo_prediction_table_name,
                 df,
             )
         except Exception as e:
@@ -195,7 +193,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                aws_dynamodb_train_table_name,
+                dynamodb_stock_table_name,
             )
 
             df = post_process_train_data_from_dynamodb(df, df_col_order)
@@ -240,7 +238,9 @@ def handler(event, context):
             ),
         }
 
-    # update predict
+    #update stock table
+
+    # update predict table
     elif event["handler"] == "update_predict":
         try:
             # get all item from stock table
@@ -248,7 +248,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                aws_dynamodb_train_table_name,
+                dynamodb_stock_table_name,
             )
 
             # post process get data from dynamodb
@@ -259,7 +259,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                aws_dynamo_prediction_table_name,
+                dynamo_prediction_table_name,
             )
 
             #まだ予測していないデータを取得
@@ -313,7 +313,7 @@ def handler(event, context):
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
-                aws_dynamo_prediction_table_name,
+                dynamo_prediction_table_name,
                 update_pred_df,
             )
 
