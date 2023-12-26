@@ -20,6 +20,7 @@ from modules.s3_fetcher import (
 )
 from modules.dataframe_operations import (
     post_process_stock_data_from_dynamodb,
+    get_latest_stock_data,
     get_unpredicted_data,
 )
 
@@ -43,7 +44,7 @@ def handler(event, context):
     dynamo_pred_table_name = "spp_" + stock_name + "_pred"
     thread_pool_size = int(os.getenv("THREAD_POOL_SIZE"))
 
-    # check env 
+    # check env
     if not all(
         [
             tmp_dir,
@@ -296,6 +297,69 @@ def handler(event, context):
         }
 
     # update stock table
+    elif event["handler"] == "update_stock_table":
+        try:
+            print("update stock table process is 2 steps")
+            # 現在のstock tableのデータを取得
+            print("step1: get all item from dynamodb stock table", end="")
+            old_df = get_data_from_dynamodb(
+                aws_region_name,
+                aws_access_key_id,
+                aws_secret_access_key,
+                dynamodb_stock_table_name,
+            )
+            old_df = post_process_stock_data_from_dynamodb(old_df, df_col_order)
+            print("...complete")
+
+            # get latest stock data
+            print("step2: get latest stock data")
+            latest_stock_df = get_latest_stock_data(
+                target_stock, interval, df_col_order, old_df
+            )
+
+            if latest_stock_df is None:
+                print("no data to update")
+                return {
+                    "statusCode": 200,
+                    "body": json.dumps(
+                        {
+                            "message": "no data to update",
+                        }
+                    ),
+                }
+            print("...complete")
+
+            #latest_stock_dfをs3のstock tableにアップロード
+            print("step3: upload latest stock data to dynamodb")
+            upload_dynamodb(
+                aws_region_name,
+                aws_access_key_id,
+                aws_secret_access_key,
+                dynamodb_stock_table_name,
+                thread_pool_size,
+                latest_stock_df,
+            )
+            print("step3: complete")
+            print("update stock table process is complete")
+
+        except Exception as e:
+            print(e)
+            return {
+                "statusCode": 500,
+                "body": json.dumps(
+                    {
+                        "message": "fail to update stock table",
+                    }
+                ),
+            }
+        return {
+            "statusCode": 200,
+            "body": json.dumps(
+                {
+                    "message": "success to update stock table",
+                }
+            ),
+        }
 
     # update predict table
     elif event["handler"] == "update_predict":
@@ -395,6 +459,9 @@ def handler(event, context):
         }
 
     # update model
+    elif event["handler"] == "update_model":
+        ...
+
     else:
         return {
             "statusCode": 400,
@@ -407,6 +474,9 @@ def handler(event, context):
 
 
 if __name__ == "__main__":
+    # handler({"handler": "init_stock_table_from_s3"}, None)
+    # handler({"handler": "init_stock_table_from_yfinance"}, None)
     # handler({"handler": "delete_pred_table_item"}, None)
-    handler({"handler": "init_model"}, None)
+    # handler({"handler": "init_model"}, None)
     # handler({"handler": "update_predict"}, None)
+    handler({"handler": "update_stock_table"}, None)
