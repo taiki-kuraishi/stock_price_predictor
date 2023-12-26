@@ -42,6 +42,9 @@ def get_all_from_yfinance(
     # sort columns
     df = df.reindex(columns=df_col_order)
 
+    # drop timezone
+    df["datetime"] = df["datetime"].dt.tz_localize(None)
+
     return df
 
 
@@ -87,6 +90,9 @@ def get_data_for_period_from_yfinance(
 
     # sort columns
     df = df.reindex(columns=df_col_order)
+
+    # drop timezone
+    df["datetime"] = df["datetime"].dt.tz_localize(None)
 
     return df
 
