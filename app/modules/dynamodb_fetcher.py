@@ -1,5 +1,7 @@
 import boto3
 import pandas as pd
+from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 from .yfinance_fetcher import get_all_from_yfinance
 from .dataframe_operations import post_process_stock_data_from_dynamodb
 
@@ -61,16 +63,22 @@ def delete_data_from_dynamodb(
         if df["datetime"].dtype == "datetime64[ns]":
             df["datetime"] = df["datetime"].dt.isoformat()
 
-        for i in range(len(df)):
-            row = df.iloc[i].to_dict()
-            dynamodb.delete_item(
-                TableName=dynamodb_table_name,
-                Key={
-                    "id": {"N": str(row["id"])},
-                    "datetime": {"S": row["datetime"]},
-                },
-            )
-            print(f"{i+1}件目のデータを削除しました。")
+        def delete_item(row: dict):
+            try:
+                dynamodb.delete_item(
+                    TableName=dynamodb_table_name,
+                    Key={
+                        "id": {"N": str(row["id"])},
+                        "datetime": {"S": row["datetime"]},
+                    },
+                )
+            except Exception as e:
+                print(e)
+
+        # multi thread
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            list(tqdm(executor.map(delete_item, df.to_dict("records")), total=df.shape[0]))
+
     except Exception as e:
         print(e)
         raise Exception("fail to function on delete_data_from_dynamodb")
@@ -102,23 +110,29 @@ def upload_dynamodb(
         if df["datetime"].dtype == "datetime64[ns]":
             df["datetime"] = df["datetime"].dt.isoformat()
 
-        col_list = df.columns.tolist()
+        # col_list = df.columns.tolist()
 
-        for i in range(len(df)):
-            row = df.iloc[i].to_dict()
+        def put_item(row):
             dynamodb_item = {}
 
-            for col in col_list:
-                if col == "datetime":
-                    dynamodb_item[str(col)] = {"S": row[col]}
+            # print(row)
+            
+            for key in row.keys():
+                if key == "datetime":
+                    dynamodb_item[str(key)] = {"S": row[key]}
                 else:
-                    dynamodb_item[str(col)] = {"N": str(row[col])}
+                    dynamodb_item[str(key)] = {"N": str(row[key])}
 
             dynamodb.put_item(
                 TableName=dynamodb_table_name,
                 Item=dynamodb_item,
             )
-            print(f"{i+1}件目のデータを追加しました。")
+            # print(f"{row.name+1}件目のデータを追加しました。")
+
+        # multi thread
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            list(tqdm(executor.map(put_item, df.to_dict("records")), total=df.shape[0]))
+
     except Exception as e:
         print(e)
         raise Exception("fail to function on upload_dynamodb")

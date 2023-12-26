@@ -1,6 +1,7 @@
 import os
 import json
 import pandas as pd
+from tqdm import tqdm
 from joblib import dump, load
 from dotenv import load_dotenv
 from modules.model_operations import (
@@ -11,7 +12,7 @@ from modules.dynamodb_fetcher import (
     get_data_from_dynamodb,
     upload_dynamodb,
     delete_data_from_dynamodb,
-    init_train_table_dynamodb,
+    init_stock_table_dynamodb,
 )
 from modules.s3_fetcher import (
     download_model_from_s3,
@@ -80,7 +81,7 @@ def handler(event, context):
     if event["handler"] == "init_stock_table_from_s3":
         # init dynamodb s3
         try:
-            init_train_table_dynamodb(
+            init_stock_table_dynamodb(
                 tmp_dir,
                 target_stock,
                 stock_name,
@@ -116,7 +117,7 @@ def handler(event, context):
     elif event["handler"] == "init_stock_table_from_yfinance":
         # init dynamodb yfinance
         try:
-            init_train_table_dynamodb(
+            init_stock_table_dynamodb(
                 tmp_dir,
                 target_stock,
                 stock_name,
@@ -202,17 +203,21 @@ def handler(event, context):
     # init model
     elif event["handler"] == "init_model":
         try:
+            print("init model process is 3 steps")
+
             # download data from dynamodb
+            print("step1: get all item from dynamodb stock table", end="")
             train_df = get_data_from_dynamodb(
                 aws_region_name,
                 aws_access_key_id,
                 aws_secret_access_key,
                 dynamodb_stock_table_name,
             )
-
             train_df = post_process_stock_data_from_dynamodb(train_df, df_col_order)
+            print("...complete")
 
-            for i in range(1, model_num + 1):
+            print("step2: init and retrain model then dump to .pkl then upload s3")
+            for i in tqdm(range(1, model_num + 1)):
                 # init and retrain model
                 model = init_and_retrain_model(train_df, i)
 
@@ -233,9 +238,10 @@ def handler(event, context):
                     aws_secret_access_key,
                     aws_s3_bucket_name,
                 )
+            print("step2: complete")
 
-            # delete all item from train table
             # get all data from dynamodb
+            print("step3: init dynamodb trained table")
             df_to_delete = get_data_from_dynamodb(
                 aws_region_name,
                 aws_access_key_id,
@@ -244,6 +250,7 @@ def handler(event, context):
             )
 
             if not df_to_delete.empty:
+                print("train table is not empty")
                 # delete all data from dynamodb
                 delete_data_from_dynamodb(
                     aws_region_name,
@@ -261,6 +268,7 @@ def handler(event, context):
                 dynamodb_train_table_name,
                 train_df,
             )
+            print("step3: complete")
         except Exception as e:
             print(e)
             return {
