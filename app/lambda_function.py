@@ -39,9 +39,11 @@ def handler(event, context):
     aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
     aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
     dynamodb_stock_table_name = "spp_" + stock_name
-    dynamodb_train_table_name: str = "spp_" + stock_name + "_trained"
-    dynamo_pred_table_name: str = "spp_" + stock_name + "_pred"
-    # check env
+    dynamodb_train_table_name = "spp_" + stock_name + "_trained"
+    dynamo_pred_table_name = "spp_" + stock_name + "_pred"
+    thread_pool_size = int(os.getenv("THREAD_POOL_SIZE"))
+
+    # check env 
     if not all(
         [
             tmp_dir,
@@ -93,6 +95,7 @@ def handler(event, context):
                 aws_secret_access_key,
                 dynamodb_stock_table_name,
                 aws_s3_bucket_name,
+                thread_pool_size,
                 "s3",
             )
         except Exception as e:
@@ -129,6 +132,7 @@ def handler(event, context):
                 aws_secret_access_key,
                 dynamodb_stock_table_name,
                 aws_s3_bucket_name,
+                thread_pool_size,
                 "yfinance",
             )
         except Exception as e:
@@ -179,6 +183,7 @@ def handler(event, context):
                 aws_access_key_id,
                 aws_secret_access_key,
                 dynamo_pred_table_name,
+                thread_pool_size,
                 df,
             )
         except Exception as e:
@@ -257,6 +262,7 @@ def handler(event, context):
                     aws_access_key_id,
                     aws_secret_access_key,
                     dynamodb_train_table_name,
+                    thread_pool_size,
                     df_to_delete,
                 )
 
@@ -266,6 +272,7 @@ def handler(event, context):
                 aws_access_key_id,
                 aws_secret_access_key,
                 dynamodb_train_table_name,
+                thread_pool_size,
                 train_df,
             )
             print("step3: complete")
@@ -364,6 +371,7 @@ def handler(event, context):
                 aws_access_key_id,
                 aws_secret_access_key,
                 dynamo_pred_table_name,
+                thread_pool_size,
                 update_pred_df,
             )
 

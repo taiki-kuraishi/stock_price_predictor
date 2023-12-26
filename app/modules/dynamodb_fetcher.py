@@ -45,6 +45,7 @@ def delete_data_from_dynamodb(
     access_key_id: str,
     secret_access_key: str,
     dynamodb_table_name: str,
+    thread_pool_size: int,
     df: pd.DataFrame,
 ) -> None:
     """
@@ -76,8 +77,12 @@ def delete_data_from_dynamodb(
                 print(e)
 
         # multi thread
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            list(tqdm(executor.map(delete_item, df.to_dict("records")), total=df.shape[0]))
+        with ThreadPoolExecutor(max_workers=thread_pool_size) as executor:
+            list(
+                tqdm(
+                    executor.map(delete_item, df.to_dict("records")), total=df.shape[0]
+                )
+            )
 
     except Exception as e:
         print(e)
@@ -91,6 +96,7 @@ def upload_dynamodb(
     access_key_id: str,
     secret_access_key: str,
     dynamodb_table_name: str,
+    thread_pool_size: int,
     df: pd.DataFrame,
 ) -> None:
     """
@@ -116,7 +122,7 @@ def upload_dynamodb(
             dynamodb_item = {}
 
             # print(row)
-            
+
             for key in row.keys():
                 if key == "datetime":
                     dynamodb_item[str(key)] = {"S": row[key]}
@@ -130,7 +136,7 @@ def upload_dynamodb(
             # print(f"{row.name+1}件目のデータを追加しました。")
 
         # multi thread
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=thread_pool_size) as executor:
             list(tqdm(executor.map(put_item, df.to_dict("records")), total=df.shape[0]))
 
     except Exception as e:
@@ -152,6 +158,7 @@ def init_stock_table_dynamodb(
     secret_access_key: str,
     dynamodb_table_name: str,
     s3_bucket_name: str,
+    thread_pool_size: int,
     data_source: str,
 ) -> None:
     """
@@ -175,6 +182,7 @@ def init_stock_table_dynamodb(
             access_key_id,
             secret_access_key,
             dynamodb_table_name,
+            thread_pool_size,
             df,
         )
 
@@ -210,6 +218,7 @@ def init_stock_table_dynamodb(
                 access_key_id,
                 secret_access_key,
                 dynamodb_table_name,
+                thread_pool_size,
                 df,
             )
         elif data_source == "yfinance":
@@ -231,6 +240,7 @@ def init_stock_table_dynamodb(
                 access_key_id,
                 secret_access_key,
                 dynamodb_table_name,
+                thread_pool_size,
                 df,
             )
         else:
