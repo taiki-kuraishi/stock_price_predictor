@@ -467,7 +467,7 @@ def handler(event, context):
             "statusCode": 400,
             "body": json.dumps(
                 {
-                    "message": "handler is not set",
+                    "message": "wrong handler",
                 }
             ),
         }
