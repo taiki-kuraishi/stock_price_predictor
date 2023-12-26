@@ -39,6 +39,10 @@ def post_process_stock_data_from_dynamodb(
     df: pd.DataFrame,
     df_col_order: list,
 ) -> pd.DataFrame:
+    """
+    post process stock data from dynamodb
+    dynamodbから取得したデータは、カラムの順番や行の順番がバラバラなので、整形する
+    """
     try:
         # sort columns
         df = df.reindex(columns=df_col_order)
