@@ -64,24 +64,13 @@ def delete_data_from_dynamodb(
         if df["datetime"].dtype == "datetime64[ns]":
             df["datetime"] = df["datetime"].dt.isoformat()
 
-        def delete_item(row: dict):
-            try:
-                dynamodb.delete_item(
-                    TableName=dynamodb_table_name,
-                    Key={
-                        "id": {"N": str(row["id"])},
-                        "datetime": {"S": row["datetime"]},
-                    },
-                )
-            except Exception as e:
-                print(e)
-
-        # multi thread
-        with ThreadPoolExecutor(max_workers=thread_pool_size) as executor:
-            list(
-                tqdm(
-                    executor.map(delete_item, df.to_dict("records")), total=df.shape[0]
-                )
+        for row in tqdm(df.to_dict("records")):
+            dynamodb.delete_item(
+                TableName=dynamodb_table_name,
+                Key={
+                    "id": {"N": str(row["id"])},
+                    "datetime": {"S": row["datetime"]},
+                },
             )
 
     except Exception as e:
@@ -114,7 +103,7 @@ def upload_dynamodb(
 
         # if col datetime is type of datetime, convert to isoformat
         if df["datetime"].dtype == "datetime64[ns]":
-            df["datetime"] = df["datetime"].dt.isoformat()
+            df["datetime"] = df["datetime"].dt.strftime("%Y-%m-%dT%H:%M:%S")
 
         # col_list = df.columns.tolist()
 
@@ -166,17 +155,21 @@ def init_stock_table_dynamodb(
     dynamodbを初期化する
     """
     try:
+        print("init dynamodb process is 5 steps")
+
         # get all data from dynamodb
+        print("step1: get all data from dynamodb", end="")
         df = get_data_from_dynamodb(
             region_name,
             access_key_id,
             secret_access_key,
             dynamodb_table_name,
         )
-
         df = post_process_stock_data_from_dynamodb(df, df_col_order)
+        print("...complete")
 
         # delete all data from dynamodb
+        print("step2: delete all data from dynamodb")
         delete_data_from_dynamodb(
             region_name,
             access_key_id,
@@ -185,9 +178,11 @@ def init_stock_table_dynamodb(
             thread_pool_size,
             df,
         )
+        print("step2 : complete")
 
         if data_source == "s3":
             # download csv from s3
+            print("step3: download csv from s3", end="")
             s3 = boto3.client(
                 "s3",
                 region_name=region_name,
@@ -202,8 +197,10 @@ def init_stock_table_dynamodb(
             except Exception as e:
                 print(e)
                 raise Exception("fail to download csv from s3")
+            print("...complete")
 
             # read csv
+            print("step4: read csv", end="")
             try:
                 df = pd.read_csv(
                     f"{tmp_dir}/{file_name}", encoding="utf-8", index_col=None
@@ -211,8 +208,10 @@ def init_stock_table_dynamodb(
             except Exception as e:
                 print(e)
                 raise Exception("fail to read csv")
+            print("...complete")
 
             # upload data to dynamodb
+            print("step5: upload data to dynamodb")
             upload_dynamodb(
                 region_name,
                 access_key_id,
@@ -221,8 +220,10 @@ def init_stock_table_dynamodb(
                 thread_pool_size,
                 df,
             )
+            print("step5: complete")
         elif data_source == "yfinance":
             # download data from yfinance
+            print("step3: download data from yfinance")
             try:
                 df = get_all_from_yfinance(
                     target_stock,
@@ -233,8 +234,10 @@ def init_stock_table_dynamodb(
             except Exception as e:
                 print(e)
                 raise Exception("fail to download data from yfinance")
+            print("step3: complete")
 
             # upload data to dynamodb
+            print("step4: upload data to dynamodb")
             upload_dynamodb(
                 region_name,
                 access_key_id,
@@ -243,6 +246,7 @@ def init_stock_table_dynamodb(
                 thread_pool_size,
                 df,
             )
+            print("step4: complete")
         else:
             raise Exception("data_source is invalid")
     except Exception as e:
