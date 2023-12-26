@@ -18,8 +18,10 @@ def init_and_retrain_model(
         # set target and explanatory variables
         x, y = split_target_and_features(df)
 
-        # model construction
+        # model instance
         model = PassiveAggressiveRegressor()
+
+        # train model
         model.fit(x, y)
     except Exception as e:
         print(e)
