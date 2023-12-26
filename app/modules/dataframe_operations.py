@@ -63,7 +63,7 @@ def get_latest_stock_data(
     target_stock: str,
     interval: int,
     df_col_order: list,
-    df: pd.DataFrame,
+    old_df: pd.DataFrame,
 ) -> pd.DataFrame | None:
     """
     update model and predict
@@ -72,17 +72,15 @@ def get_latest_stock_data(
     """
     try:
         # get last_updated_datetime YYYY-MM-DD HH:MM:SS
-        last_updated_datetime = df.tail(1)["datetime"].values[0]
-        # last_updated_datetime = "2023-12-10 15:30:00-05:00"
-        print("last updated datetime: " + last_updated_datetime)
+        last_updated_datetime = old_df.tail(1)["datetime"].values[0]
 
         # last_updated_datetime to YYYY-MM-DD
         last_updated_date = last_updated_datetime[:10]
-        print("last updated date: " + last_updated_date)
+        print("\tlast updated date (start date): " + last_updated_date)
 
         # get tomorrow
         tomorrow = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
-        print("tomorrow: " + tomorrow)
+        print("\ttomorrow (end date): " + tomorrow)
 
         # get data from yahoo finance
         update_df = get_data_for_period_from_yfinance(
@@ -97,15 +95,14 @@ def get_latest_stock_data(
             return None
 
         # get last index from preprocessed csv
-        last_index = df.tail(1)["id"].values[0]
-        print("last index: " + str(last_index))
+        last_index = old_df.tail(1)["id"].values[0]
 
         # add id
         update_df["id"] = update_df.index + last_index + 1
 
         # updateされた件数を出力
         update_rows = len(update_df)
-        print("update rows: " + str(update_rows))
+        print("\tupdate rows: " + str(update_rows))
 
     except Exception as e:
         print(e)
