@@ -45,7 +45,6 @@ def delete_data_from_dynamodb(
     access_key_id: str,
     secret_access_key: str,
     dynamodb_table_name: str,
-    thread_pool_size: int,
     df: pd.DataFrame,
 ) -> None:
     """
@@ -85,8 +84,8 @@ def upload_dynamodb(
     access_key_id: str,
     secret_access_key: str,
     dynamodb_table_name: str,
-    thread_pool_size: int,
     df: pd.DataFrame,
+    thread_pool_size: int = 1,
 ) -> None:
     """
     upload data to dynamodb
@@ -175,7 +174,6 @@ def init_stock_table_dynamodb(
             access_key_id,
             secret_access_key,
             dynamodb_table_name,
-            thread_pool_size,
             df,
         )
         print("step2:complete")
@@ -217,8 +215,8 @@ def init_stock_table_dynamodb(
                 access_key_id,
                 secret_access_key,
                 dynamodb_table_name,
-                thread_pool_size,
                 df,
+                thread_pool_size,
             )
             print("step5: complete")
         elif data_source == "yfinance":
@@ -243,8 +241,8 @@ def init_stock_table_dynamodb(
                 access_key_id,
                 secret_access_key,
                 dynamodb_table_name,
-                thread_pool_size,
                 df,
+                thread_pool_size,
             )
             print("step4: complete")
         else:
