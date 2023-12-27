@@ -178,7 +178,7 @@ def init_stock_table_dynamodb(
             thread_pool_size,
             df,
         )
-        print("step2 : complete")
+        print("step2:complete")
 
         if data_source == "s3":
             # download csv from s3
