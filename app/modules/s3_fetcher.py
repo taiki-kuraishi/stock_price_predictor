@@ -108,13 +108,13 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv()
-    tmp_dir: str = "../../tmp/"
-    stock_name: str = os.getenv("STOCK_NAME")
+    tmp_dir = "../../tmp/"
+    stock_name: str = os.environ["STOCK_NAME"]
     predict_horizon: int = 1
-    aws_region_name: str = os.getenv("AWS_REGION_NAME")
-    aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
+    aws_region_name: str = os.environ["AWS_REGION_NAME"]
+    aws_access_key_id: str = os.environ["AWS_ACCESS_KEY_ID"]
+    aws_secret_access_key: str = os.environ["AWS_SECRET_ACCESS_KEY"]
+    aws_s3_bucket_name: str = os.environ["AWS_S3_BUCKET_NAME"]
 
     model = PassiveAggressiveRegressor()
 

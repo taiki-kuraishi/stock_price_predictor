@@ -61,7 +61,7 @@ def post_process_stock_data_from_dynamodb(
 
 def get_latest_stock_data(
     target_stock: str,
-    interval: int,
+    interval: str,
     df_col_order: list,
     old_df: pd.DataFrame,
 ) -> pd.DataFrame | None:

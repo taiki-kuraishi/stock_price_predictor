@@ -106,7 +106,7 @@ def upload_dynamodb(
 
         # col_list = df.columns.tolist()
 
-        def put_item(row):
+        def put_item(row: dict) -> None:
             dynamodb_item = {}
 
             # print(row)
@@ -263,17 +263,18 @@ if __name__ == "__main__":
     from dotenv import load_dotenv
 
     load_dotenv(dotenv_path="../../.env", override=True)
-    tmp_dir: str = "../../tmp"
-    target_stock: str = os.getenv("TARGET_STOCK")
-    stock_name: str = os.getenv("STOCK_NAME")
-    period: str = os.getenv("PERIOD")
-    interval: str = os.getenv("INTERVAL")
-    df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
-    aws_region_name: str = os.getenv("AWS_REGION_NAME")
-    aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
+    tmp_dir = "../../tmp"
+    target_stock: str = os.environ["TARGET_STOCK"]
+    stock_name: str = os.environ["STOCK_NAME"]
+    period: str = os.environ["PERIOD"]
+    interval: str = os.environ["INTERVAL"]
+    df_col_order: list = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
+    aws_region_name: str = os.environ["AWS_REGION_NAME"]
+    aws_access_key_id: str = os.environ["AWS_ACCESS_KEY_ID"]
+    aws_secret_access_key: str = os.environ["AWS_SECRET_ACCESS_KEY"]
     dynamodb_stock_table_name = "spp_" + stock_name
-    aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
+    aws_s3_bucket_name: str = os.environ["AWS_S3_BUCKET_NAME"]
+    thread_pool_size = int(os.environ["THREAD_POOL_SIZE"])
 
     print("do you want to init dynamodb? data source is s3 (y/n)")
     if input() == "y":
@@ -290,6 +291,7 @@ if __name__ == "__main__":
             aws_secret_access_key,
             dynamodb_stock_table_name,
             aws_s3_bucket_name,
+            thread_pool_size,
             "s3",
         )
     else:
@@ -309,6 +311,7 @@ if __name__ == "__main__":
             aws_secret_access_key,
             dynamodb_stock_table_name,
             aws_s3_bucket_name,
+            thread_pool_size,
             "yfinance",
         )
     else:

@@ -4,6 +4,7 @@ import pandas as pd
 from tqdm import tqdm
 from joblib import dump
 from dotenv import load_dotenv
+from aws_lambda_context import LambdaContext
 from modules.dataframe_operations import (
     post_process_stock_data_from_dynamodb,
     get_latest_stock_data,
@@ -26,46 +27,32 @@ from modules.s3_fetcher import (
 )
 
 
-def handler(event, context):
+def handler(event: dict, context: LambdaContext | None) -> dict:
     # read env
-    load_dotenv(dotenv_path="../.env", override=True)
-    tmp_dir: str = os.getenv("TMP_DIR")
-    target_stock: str = os.getenv("TARGET_STOCK")
-    stock_name: str = os.getenv("STOCK_NAME")
-    period: str = os.getenv("PERIOD")
-    interval: str = os.getenv("INTERVAL")
-    df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
-    model_num = int(os.getenv("MODEL_NUM"))
-    aws_region_name: str = os.getenv("AWS_REGION_NAME")
-    aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
-    dynamodb_stock_table_name = "spp_" + stock_name
-    dynamodb_train_table_name = "spp_" + stock_name + "_trained"
-    dynamo_pred_table_name = "spp_" + stock_name + "_pred"
-    thread_pool_size = int(os.getenv("THREAD_POOL_SIZE"))
-
-    # check env
-    if not all(
-        [
-            tmp_dir,
-            target_stock,
-            stock_name,
-            period,
-            interval,
-            df_col_order,
-            model_num,
-            aws_region_name,
-            aws_access_key_id,
-            aws_secret_access_key,
-            aws_s3_bucket_name,
-        ]
-    ):
+    try:
+        load_dotenv(dotenv_path="../.env", override=True)
+        tmp_dir: str = os.environ["TMP_DIR"]
+        target_stock: str = os.environ["TARGET_STOCK"]
+        stock_name: str = os.environ["STOCK_NAME"]
+        period: str = os.environ["PERIOD"]
+        interval: str = os.environ["INTERVAL"]
+        df_col_order: list = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
+        model_num = int(os.environ["MODEL_NUM"])
+        aws_region_name: str = os.environ["AWS_REGION_NAME"]
+        aws_access_key_id: str = os.environ["AWS_ACCESS_KEY_ID"]
+        aws_secret_access_key: str = os.environ["AWS_SECRET_ACCESS_KEY"]
+        aws_s3_bucket_name: str = os.environ["AWS_S3_BUCKET_NAME"]
+        dynamodb_stock_table_name = "spp_" + stock_name
+        dynamodb_train_table_name = "spp_" + stock_name + "_trained"
+        dynamo_pred_table_name = "spp_" + stock_name + "_pred"
+        thread_pool_size = int(os.environ["THREAD_POOL_SIZE"])
+    except Exception as e:
+        print(e)
         return {
             "statusCode": 500,
             "body": json.dumps(
                 {
-                    "message": "fail to read env. not all env are set",
+                    "message": "fail to read env",
                 }
             ),
         }
@@ -300,6 +287,7 @@ def handler(event, context):
                     }
                 ),
             }
+
         return {
             "statusCode": 200,
             "body": json.dumps(
@@ -365,6 +353,7 @@ def handler(event, context):
                     }
                 ),
             }
+
         return {
             "statusCode": 200,
             "body": json.dumps(
@@ -474,6 +463,7 @@ def handler(event, context):
                     }
                 ),
             }
+
         return {
             "statusCode": 200,
             "body": json.dumps(
@@ -587,6 +577,15 @@ def handler(event, context):
                     }
                 ),
             }
+        
+        return {
+            "statusCode": 200,
+            "body": json.dumps(
+                {
+                    "message": "success to update model",
+                }
+            ),
+        }
 
     else:
         return {

@@ -90,11 +90,11 @@ if __name__ == "__main__":
     from dataframe_operations import post_process_stock_data_from_dynamodb
 
     load_dotenv(dotenv_path="../../.env", override=True)
-    stock_name: str = os.getenv("STOCK_NAME")
-    df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
-    aws_region_name: str = os.getenv("AWS_REGION_NAME")
-    aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
+    stock_name: str = os.environ["STOCK_NAME"]
+    df_col_order: list = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
+    aws_region_name: str = os.environ["AWS_REGION_NAME"]
+    aws_access_key_id: str = os.environ["AWS_ACCESS_KEY_ID"]
+    aws_secret_access_key: str = os.environ["AWS_SECRET_ACCESS_KEY"]
     dynamodb_stock_table_name = "spp_" + stock_name
 
     # modelの数
