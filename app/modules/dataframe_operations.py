@@ -111,15 +111,14 @@ def get_latest_stock_data(
     return update_df
 
 
-def get_unpredicted_data(
-    pred_df: pd.DataFrame,
-    stock_df: pd.DataFrame,
+def get_rows_not_in_other_df(
+    df1: pd.DataFrame,
+    df2: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    dynamodbのpred tableに保存されていない(予測されていない)データを予測するための説明変数(dataFrame)を取得する
+    get rows not in other df
+    df1にあってdf2にない行を取得する
     """
-    mask = stock_df["datetime"].isin(pred_df["datetime"])
-
-    unpredicted_df = stock_df[~mask]
-
-    return unpredicted_df
+    mask = df2["datetime"].isin(df1["datetime"])
+    rows_not_in_other_df = df2[~mask]
+    return rows_not_in_other_df
