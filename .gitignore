@@ -246,4 +246,8 @@ $RECYCLE.BIN/
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,python,venv
 
+#aws labda tmp
 /tmp
+
+#test data
+test_data/
