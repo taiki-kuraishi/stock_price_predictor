@@ -30,7 +30,6 @@ from modules.s3_fetcher import (
 def handler(event: dict, context: LambdaContext | None) -> dict:
     # read env
     try:
-        load_dotenv(dotenv_path="../.env", override=True)
         tmp_dir: str = os.environ["TMP_DIR"]
         target_stock: str = os.environ["TARGET_STOCK"]
         stock_name: str = os.environ["STOCK_NAME"]
@@ -577,7 +576,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                     }
                 ),
             }
-        
+
         return {
             "statusCode": 200,
             "body": json.dumps(
@@ -599,6 +598,8 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
 
 if __name__ == "__main__":
+    load_dotenv(dotenv_path="../.env", override=True)
+    handler({"handler": ""}, None)
     handler({"handler": "init_stock_table_from_s3"}, None)
     # handler({"handler": "init_stock_table_from_yfinance"}, None)
     handler({"handler": "delete_pred_table_item"}, None)
