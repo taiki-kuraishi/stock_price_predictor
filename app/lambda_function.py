@@ -3,7 +3,6 @@ import json
 import pandas as pd
 from tqdm import tqdm
 from joblib import dump
-from dotenv import load_dotenv
 from aws_lambda_context import LambdaContext
 from modules.dataframe_operations import (
     post_process_stock_data_from_dynamodb,
@@ -37,9 +36,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
         interval: str = os.environ["INTERVAL"]
         df_col_order: list = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
         model_num = int(os.environ["MODEL_NUM"])
-        aws_region_name: str = os.environ["AWS_REGION_NAME"]
-        aws_access_key_id: str = os.environ["AWS_ACCESS_KEY_ID"]
-        aws_secret_access_key: str = os.environ["AWS_SECRET_ACCESS_KEY"]
+        aws_region_name: str = os.environ["REGION_NAME"]
+        aws_access_key_id: str = os.environ["ACCESS_KEY_ID"]
+        aws_secret_access_key: str = os.environ["SECRET_ACCESS_KEY"]
         aws_s3_bucket_name: str = os.environ["AWS_S3_BUCKET_NAME"]
         dynamodb_stock_table_name = "spp_" + stock_name
         dynamodb_train_table_name = "spp_" + stock_name + "_trained"
@@ -47,25 +46,11 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
         thread_pool_size = int(os.environ["THREAD_POOL_SIZE"])
     except Exception as e:
         print(e)
-        return {
-            "statusCode": 500,
-            "body": json.dumps(
-                {
-                    "message": "fail to read env",
-                }
-            ),
-        }
+        raise Exception("fail to read env")
 
     # check handler
     if "handler" not in event:
-        return {
-            "statusCode": 400,
-            "body": json.dumps(
-                {
-                    "message": "handler is not set",
-                }
-            ),
-        }
+        raise Exception("no handler")
 
     # init train table
     if event["handler"] == "init_stock_table_from_s3":
@@ -88,14 +73,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             )
         except Exception as e:
             print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to init dynamodb",
-                    }
-                ),
-            }
+            raise Exception("fail to init dynamodb")
 
         return {
             "statusCode": 200,
@@ -125,14 +103,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             )
         except Exception as e:
             print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to init dynamodb",
-                    }
-                ),
-            }
+            raise Exception("fail to init dynamodb")
 
         return {
             "statusCode": 200,
@@ -183,14 +154,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             print("delete all item in pred table process is complete")
         except Exception as e:
             print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to delete all item in pred table",
-                    }
-                ),
-            }
+            raise Exception("fail to delete all item in pred table")
         return {
             "statusCode": 200,
             "body": json.dumps(
@@ -278,14 +242,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             print("init model process is complete")
         except Exception as e:
             print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to init model",
-                    }
-                ),
-            }
+            raise Exception("fail to init model")
 
         return {
             "statusCode": 200,
@@ -344,14 +301,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
         except Exception as e:
             print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to update stock table",
-                    }
-                ),
-            }
+            raise Exception("fail to update stock table")
 
         return {
             "statusCode": 200,
@@ -454,14 +404,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             print("update predict process is complete")
         except Exception as e:
             print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to update predict",
-                    }
-                ),
-            }
+            raise Exception("fail to update predict")
 
         return {
             "statusCode": 200,
@@ -568,14 +511,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             print("update model process is complete")
         except Exception as e:
             print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to update model",
-                    }
-                ),
-            }
+            raise Exception("fail to update model")
 
         return {
             "statusCode": 200,
@@ -595,15 +531,3 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                 }
             ),
         }
-
-
-if __name__ == "__main__":
-    load_dotenv(dotenv_path="../.env", override=True)
-    handler({"handler": ""}, None)
-    handler({"handler": "init_stock_table_from_s3"}, None)
-    # handler({"handler": "init_stock_table_from_yfinance"}, None)
-    handler({"handler": "delete_pred_table_item"}, None)
-    handler({"handler": "init_model"}, None)
-    handler({"handler": "update_predict"}, None)
-    handler({"handler": "update_stock_table"}, None)
-    handler({"handler": "update_model"}, None)
