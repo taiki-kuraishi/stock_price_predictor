@@ -15,25 +15,19 @@ def lambda_handler(event: dict, context: LambdaContext):
     dynamodb_pred_table_name = "spp_" + stock_name + "_pred"
 
     if "handler" not in event:
-        return {
-            "statusCode": 400,
-            "body": json.dumps(
-                {
-                    "message": "bad request",
-                }
-            ),
-        }
+        return json.dumps(
+            {
+                "message": "bad request",
+            }
+        )
 
     # hello world
     if event["handler"] == "hello":
-        return {
-            "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "hello world",
-                }
-            ),
-        }
+        return json.dumps(
+            {
+                "message": "hello world",
+            }
+        )
 
     # latest
     elif event["handler"] == "latest":
@@ -76,18 +70,12 @@ def lambda_handler(event: dict, context: LambdaContext):
 
         print(response_body)
 
-        return {
-            "statusCode": 200,
-            "body": json.dumps(response_body),
-        }
+        return json.dumps(response_body)
 
     # error
     else:
-        return {
-            "statusCode": 400,
-            "body": json.dumps(
-                {
-                    "message": "bad request",
-                }
-            ),
-        }
+        return json.dumps(
+            {
+                "message": "bad request",
+            }
+        )
