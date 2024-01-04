@@ -1,5 +1,4 @@
 import os
-import json
 import pandas as pd
 from tqdm import tqdm
 from joblib import dump
@@ -77,11 +76,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
         return {
             "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to init dynamodb",
-                }
-            ),
+            "body": {
+                "message": "success to init dynamodb",
+            },
         }
     elif event["handler"] == "init_stock_table_from_yfinance":
         # init dynamodb yfinance
@@ -107,11 +104,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
         return {
             "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to init dynamodb",
-                }
-            ),
+            "body": {
+                "message": "success to init dynamodb",
+            },
         }
 
     # delete all item in pred table
@@ -134,11 +129,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                 print("delete all item in pred table process is complete")
                 return {
                     "statusCode": 200,
-                    "body": json.dumps(
-                        {
-                            "message": "no item in pred table",
-                        }
-                    ),
+                    "body": {
+                        "message": "no item in pred table",
+                    },
                 }
 
             # pred tableからすべてのitemを削除
@@ -157,11 +150,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             raise Exception("fail to delete all item in pred table")
         return {
             "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to delete all item in pred table",
-                }
-            ),
+            "body": {
+                "message": "success to delete all item in pred table",
+            },
         }
 
     # init model
@@ -246,11 +237,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
         return {
             "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to init model",
-                }
-            ),
+            "body": {
+                "message": "success to init model",
+            },
         }
 
     # update stock table
@@ -278,11 +267,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                 print("no data to update")
                 return {
                     "statusCode": 200,
-                    "body": json.dumps(
-                        {
-                            "message": "no data to update",
-                        }
-                    ),
+                    "body": {
+                        "message": "no data to update",
+                    },
                 }
             print("...complete")
 
@@ -305,11 +292,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
         return {
             "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to update stock table",
-                }
-            ),
+            "body": {
+                "message": "success to update stock table",
+            },
         }
 
     # update predict table
@@ -348,11 +333,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                 print("update predict process is complete")
                 return {
                     "statusCode": 200,
-                    "body": json.dumps(
-                        {
-                            "message": "no data to predict",
-                        }
-                    ),
+                    "body": {
+                        "message": "no data to predict",
+                    },
                 }
 
             # model download from s3
@@ -408,11 +391,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
         return {
             "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to update predict",
-                }
-            ),
+            "body": {
+                "message": "success to update predict",
+            },
         }
 
     # update model
@@ -453,11 +434,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                 print("update model process is complete")
                 return {
                     "statusCode": 200,
-                    "body": json.dumps(
-                        {
-                            "message": "no data to train",
-                        }
-                    ),
+                    "body": {
+                        "message": "no data to train",
+                    },
                 }
 
             # model download from s3
@@ -515,19 +494,15 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
         return {
             "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to update model",
-                }
-            ),
+            "body": {
+                "message": "success to update model",
+            },
         }
 
     else:
         return {
             "statusCode": 400,
-            "body": json.dumps(
-                {
-                    "message": "wrong handler",
-                }
-            ),
+            "body": {
+                "message": "wrong handler",
+            },
         }
