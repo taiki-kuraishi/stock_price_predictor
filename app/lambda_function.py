@@ -1,5 +1,4 @@
 import os
-import json
 from datetime import timedelta
 from dateutil.parser import parse
 from aws_lambda_context import LambdaContext
@@ -15,19 +14,15 @@ def lambda_handler(event: dict, context: LambdaContext):
     dynamodb_pred_table_name = "spp_" + stock_name + "_pred"
 
     if "handler" not in event:
-        return json.dumps(
-            {
-                "message": "bad request",
-            }
-        )
+        return {
+            "message": "bad request",
+        }
 
     # hello world
     if event["handler"] == "hello":
-        return json.dumps(
-            {
-                "message": "hello world",
-            }
-        )
+        return {
+            "message": "hello world",
+        }
 
     # latest
     elif event["handler"] == "latest":
@@ -70,12 +65,10 @@ def lambda_handler(event: dict, context: LambdaContext):
 
         print(response_body)
 
-        return json.dumps(response_body)
+        return response_body
 
     # error
     else:
-        return json.dumps(
-            {
-                "message": "bad request",
-            }
-        )
+        return {
+            "message": "bad request",
+        }
