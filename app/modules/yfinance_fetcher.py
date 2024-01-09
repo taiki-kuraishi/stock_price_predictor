@@ -13,18 +13,15 @@ def get_all_from_yfinance(
     yfinanceからとれるだけすべてのデータを取得する
     """
     # get data from yahoo finance
-    try:
-        df = yf.download(tickers=target_stock, period=period, interval=interval)
-        if df.empty:
-            print("fail to get data from yahoo finance")
-            return
-        else:
-            print("success to get data from yahoo finance")
-            print("rows : " + str(len(df)))
-    except Exception as e:
-        print(e)
+    df = yf.download(tickers=target_stock, period=period, interval=interval)
+    if df.empty:
         print("fail to get data from yahoo finance")
-        return
+        raise Exception(
+            "fail to get data from yahoo finance. data is empty (get_all_from_yfinance)"
+        )
+    else:
+        print("success to get data from yahoo finance")
+        print("rows : " + str(len(df)))
 
     # reset index and rename column
     df.reset_index(inplace=True, drop=False)
@@ -60,20 +57,17 @@ def get_data_for_period_from_yfinance(
     yfinanceからstart_dateからend_dateまでのデータを取得する
     """
     # get data from yahoo finance
-    try:
-        df = yf.download(
-            tickers=target_stock, start=start_date, end=end_date, interval=interval
-        )
-        if df.empty:
-            print("fail to get data from yahoo finance")
-            return
-        else:
-            print("success to get data from yahoo finance")
-            print("rows : " + str(len(df)))
-    except Exception as e:
-        print(e)
+    df = yf.download(
+        tickers=target_stock, start=start_date, end=end_date, interval=interval
+    )
+    if df.empty:
         print("fail to get data from yahoo finance")
-        return
+        raise Exception(
+            "fail to get data from yahoo finance. data is empty (get_data_for_period_from_yfinance)"
+        )
+    else:
+        print("success to get data from yahoo finance")
+        print("rows : " + str(len(df)))
 
     # reset index and rename column
     df.reset_index(inplace=True, drop=False)
@@ -95,37 +89,3 @@ def get_data_for_period_from_yfinance(
     df["datetime"] = df["datetime"].dt.tz_localize(None)
 
     return df
-
-
-if __name__ == "__main__":
-    """
-    yfinanceから取得可能なすべてのデータを取得する
-    yfinanceから今日のデータを取得する
-    """
-    import os
-    from datetime import datetime, timedelta
-    from dotenv import load_dotenv
-
-    load_dotenv(override=True)
-    target_stock: str = os.environ["TARGET_STOCK"]
-    stock_name: str = os.environ["STOCK_NAME"]
-    period: str = os.environ["PERIOD"]
-    interval: str = os.environ["INTERVAL"]
-    df_col_order: list = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
-
-    # get_all_from_yfinance
-    df = get_all_from_yfinance(target_stock, period, interval, df_col_order)
-    print(df)
-
-    # save as csv
-    df.to_csv(f"../../tmp/spp_{stock_name}_{period}_{interval}.csv", index=False)
-
-    # get_data_for_period_from_yfinance
-    today = datetime.today().strftime("%Y-%m-%d")
-    tomorrow = (datetime.today() + timedelta(days=1)).strftime("%Y-%m-%d")
-    print("today: " + today, "\ntomorrow: " + tomorrow)
-
-    df = get_data_for_period_from_yfinance(
-        target_stock, today, tomorrow, interval, df_col_order
-    )
-    print(df)
