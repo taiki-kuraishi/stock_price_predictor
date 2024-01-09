@@ -14,4 +14,5 @@ if __name__ == "__main__":
     # handler({"handler": "init_model"}, None)
     # handler({"handler": "update_predict"}, None)
     # handler({"handler": "update_stock_table"}, None)
+    # handler({"handler": "update_and_predict_tables"}, None)
     # handler({"handler": "update_model"}, None)

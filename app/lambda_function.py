@@ -396,6 +396,31 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             },
         }
 
+    # update_and_predict_tables
+    elif event["handler"] == "update_and_predict_tables":
+        try:
+            print("update_and_predict_tables process")
+            update_stock_table_res = handler({"handler": "update_stock_table"}, context)
+            update_stock_table_res_message: str = update_stock_table_res["body"][
+                "message"
+            ]
+
+            update_predict_res = handler({"handler": "update_predict"}, context)
+            update_predict_res_message: str = update_predict_res["body"]["message"]
+
+            print("update_and_predict_tables process is complete")
+        except Exception as e:
+            print(e)
+            raise Exception("fail to update_and_predict_tables")
+        return {
+            "statusCode": 200,
+            "body": {
+                "message": "success to update_and_predict_tables",
+                "update_stock_table": update_stock_table_res_message,
+                "update_predict": update_predict_res_message,
+            },
+        }
+
     # update model
     elif event["handler"] == "update_model":
         try:
