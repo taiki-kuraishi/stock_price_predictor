@@ -49,7 +49,12 @@ def get_data_from_dynamodb_stream_while(
     )
 
     # DynamoDBストリームクライアントを作成
-    dynamodbstreams = boto3.client("dynamodbstreams")
+    dynamodbstreams = boto3.client(
+        "dynamodbstreams",
+        region_name=region_name,
+        aws_access_key_id=access_key_id,
+        aws_secret_access_key=secret_access_key,
+    )
 
     # テーブルの詳細を取得
     table_description = dynamodb.describe_table(TableName=dynamodb_table_name)
@@ -105,7 +110,12 @@ def get_data_from_dynamodb_stream(
     )
 
     # DynamoDBストリームクライアントを作成
-    dynamodbstreams = boto3.client("dynamodbstreams")
+    dynamodbstreams = boto3.client(
+        "dynamodbstreams",
+        region_name=region_name,
+        aws_access_key_id=access_key_id,
+        aws_secret_access_key=secret_access_key,
+    )
 
     # テーブルの詳細を取得
     table_description = dynamodb.describe_table(TableName=dynamodb_table_name)

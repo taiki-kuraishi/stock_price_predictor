@@ -1,4 +1,5 @@
 import os
+import pytz
 from datetime import timedelta
 from dateutil.parser import parse
 from aws_lambda_context import LambdaContext
@@ -17,6 +18,9 @@ def lambda_handler(event: dict, context: LambdaContext):
     secret_access_key: str = os.environ["SECRET_ACCESS_KEY"]
     time_list: list[int] = [int(i) for i in os.environ["TIME_LIST"].split(",")]
     dynamodb_pred_table_name = "spp_" + stock_name + "_pred"
+
+    # set timezone
+    JST = pytz.timezone("Asia/Tokyo")
 
     if "handler" not in event:
         return {
@@ -85,7 +89,9 @@ def lambda_handler(event: dict, context: LambdaContext):
             raise Exception("dynamodb_stream_response is None")
 
         newImage = dynamodb_response["NewImage"]
-        CreationDateTime = dynamodb_response["ApproximateCreationDateTime"]
+        CreationDateTime = dynamodb_response["ApproximateCreationDateTime"].astimezone(
+            JST
+        )
 
         # create response body
         response_body = {
@@ -148,11 +154,15 @@ def lambda_handler(event: dict, context: LambdaContext):
             dynamodb_pred_table_name,
         )
 
+        print("dynamodb_response : ", dynamodb_response)
+
         if dynamodb_response is None:
             raise Exception("dynamodb_stream_response is None")
 
         newImage = dynamodb_response["NewImage"]
-        CreationDateTime = dynamodb_response["ApproximateCreationDateTime"]
+        CreationDateTime = dynamodb_response["ApproximateCreationDateTime"].astimezone(
+            JST
+        )
 
         # create response body
         response_body = {
@@ -175,6 +185,8 @@ def lambda_handler(event: dict, context: LambdaContext):
 
         # CreationDateTimeの時間がtime_listにない場合はエラー
         if predictionBaseHour not in time_list:
+            print("time_list : ", time_list)
+            print("predictionBaseHour : ", predictionBaseHour)
             raise Exception("predictionBaseHour not in time_list")
 
         time_list_index = time_list.index(predictionBaseHour)
