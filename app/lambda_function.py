@@ -139,7 +139,10 @@ def lambda_handler(event: dict, context: LambdaContext):
                     hour=int(time_list[time_list_index + int(index)])
                 )
             pred_time = pred_time.isoformat()
-            response_body["prediction"][pred_time] = str(value["N"])
+            response_body["prediction"][key] = {
+                "value": str(value["N"]),
+                "datetime": pred_time,
+            }
 
         print("response_body : ", response_body)
 
@@ -212,7 +215,10 @@ def lambda_handler(event: dict, context: LambdaContext):
                     hour=int(time_list[time_list_index + int(index)])
                 )
             pred_time = pred_time.isoformat()
-            response_body["prediction"][pred_time] = str(value["N"])
+            response_body["prediction"][key] = {
+                "value": str(value["N"]),
+                "datetime": pred_time,
+            }
 
         print("response_body : ", response_body)
 
