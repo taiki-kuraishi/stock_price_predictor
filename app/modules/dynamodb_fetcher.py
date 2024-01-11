@@ -1,5 +1,6 @@
 import time
 import boto3
+from boto3.dynamodb.conditions import Key
 import pandas as pd
 
 
@@ -144,3 +145,35 @@ def get_data_from_dynamodb_stream(
         if records_response["Records"] != []:
             return records_response["Records"][0]["dynamodb"]
     return None
+
+
+# get data from dynamodb on query
+def get_data_from_dynamodb_query(
+    region_name: str,
+    access_key_id: str,
+    secret_access_key: str,
+    dynamodb_table_name: str,
+    datetime: str,
+) -> pd.DataFrame:
+    """
+    dynamodbからqueryを使用してデータを取得する
+    primary key のdatetime列の値が引数のdatetimeと一致するデータを取得し、その値をDataFrame型として返す
+    """
+
+    # instance dynamodb
+    dynamodb = boto3.resource(
+        "dynamodb",
+        region_name=region_name,
+        aws_access_key_id=access_key_id,
+        aws_secret_access_key=secret_access_key,
+    )
+
+    table = dynamodb.Table(dynamodb_table_name)
+
+    response = table.query(
+        KeyConditionExpression=Key("datetime").eq(datetime)
+    )
+
+    df = pd.DataFrame(response["Items"])
+
+    return df
