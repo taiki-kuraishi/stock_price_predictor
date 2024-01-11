@@ -10,3 +10,4 @@ if __name__ == "__main__":
     lambda_handler({"handler": "latest"}, None)
     lambda_handler({"handler": "latest_stream"}, None)
     lambda_handler({"handler": "latest_stream_while"}, None)
+    lambda_handler({"handler": "latest_query"}, None)
