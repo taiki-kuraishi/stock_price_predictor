@@ -197,7 +197,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                 "stock_id": target_stock,
                 "operation": "stock",
                 "create_at": datetime.now(JST).isoformat(),
-                "max":pd.to_datetime(
+                "max": pd.to_datetime(
                     original_df.tail(1)["date"].values[0]
                     + " "
                     + original_df.tail(1)["time"].values[0]
@@ -353,7 +353,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             return {
                 "message": "no data to update",
             }
-        
+
         print("step3: upload latest stock data to dynamodb")
         with stock_table.batch_writer() as batch:
             for item in tqdm(yfinance_response_df.to_dict("records")):
@@ -456,6 +456,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
         update_prediction_df = update_prediction_df.apply(
             lambda x: x.map(lambda y: Decimal(str(y)) if isinstance(y, float) else y)
         )
+
+        # create_at column
+        update_prediction_df["create_at"] = datetime.now(JST).isoformat()
 
         print("To update dataFrame : \n")
         print(update_prediction_df)
