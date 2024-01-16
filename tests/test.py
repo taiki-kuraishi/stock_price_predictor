@@ -7,7 +7,4 @@ from lambda_function import lambda_handler
 
 if __name__ == "__main__":
     load_dotenv(dotenv_path="../.env", verbose=True, override=True)
-    lambda_handler({"handler": "latest"}, None)
-    lambda_handler({"handler": "latest_stream"}, None)
-    lambda_handler({"handler": "latest_stream_while"}, None)
-    lambda_handler({"handler": "latest_query"}, None)
+    print(lambda_handler({"handler": "latest"}, None))
