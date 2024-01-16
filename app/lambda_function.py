@@ -38,7 +38,6 @@ def lambda_handler(event: dict, context: LambdaContext):
     # hello world
     if event["handler"] == "latest":
         todays_date = datetime.now(JST).strftime("%Y-%m-%d")
-        todays_date = "2024-01-15"
         response = table.query(KeyConditionExpression=Key("date").eq(todays_date))[
             "Items"
         ]
@@ -88,10 +87,10 @@ def lambda_handler(event: dict, context: LambdaContext):
             ):
                 continue
 
-            index = key.split("_")[0]
+            index = int(key.split("_")[0]) + 1
             pred_time = prediction_dict["datetime"]
 
-            if time_list_index + int(index) >= len(time_list):
+            if time_list_index + index >= len(time_list):
                 pred_time = pred_time.replace(day=pred_time.day + 1)
 
                 # weakDayが5,6(土、日)の場合は月曜日まで日付を進める
@@ -101,14 +100,14 @@ def lambda_handler(event: dict, context: LambdaContext):
                     pred_time = pred_time.replace(day=pred_time.day + 1)
 
                 pred_time = pred_time.replace(
-                    hour=int(time_list[time_list_index + int(index) - len(time_list)])
+                    hour=int(time_list[time_list_index + index - len(time_list)])
                 )
             else:
                 pred_time = pred_time.replace(
-                    hour=int(time_list[time_list_index + int(index)])
+                    hour=int(time_list[time_list_index + index])
                 )
             pred_time = pred_time.isoformat()
-            response_body["prediction"][str(index) + "_hour_prediction"] = {
+            response_body["prediction"][str(index - 1) + "_hour_prediction"] = {
                 "value": str(value),
                 "datetime": pred_time,
             }
