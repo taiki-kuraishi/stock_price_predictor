@@ -87,7 +87,7 @@ def lambda_handler(event: dict, context: LambdaContext):
             ):
                 continue
 
-            index = int(key.split("_")[0]) + 1
+            index = int(key.split("_")[0])
             pred_time = prediction_dict["datetime"]
 
             if time_list_index + index >= len(time_list):
@@ -107,7 +107,7 @@ def lambda_handler(event: dict, context: LambdaContext):
                     hour=int(time_list[time_list_index + index])
                 )
             pred_time = pred_time.isoformat()
-            response_body["prediction"][str(index - 1) + "_hour_prediction"] = {
+            response_body["prediction"][str(index) + "_hour_prediction"] = {
                 "value": str(value),
                 "datetime": pred_time,
             }
