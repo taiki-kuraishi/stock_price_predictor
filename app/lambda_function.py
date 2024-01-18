@@ -450,7 +450,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                 f"models/{model_file_name}", model_local_path
             )
             model = load(model_local_path)
-            update_prediction_df[f"{i}_pred"] = model.predict(x)
+            update_prediction_df[str(i)] = model.predict(x)
 
         # convert float to decimal
         update_prediction_df = update_prediction_df.apply(
