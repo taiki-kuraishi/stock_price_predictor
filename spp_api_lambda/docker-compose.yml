@@ -1,0 +1,16 @@
+version: '3.9'
+
+services:
+  lambda:
+    container_name: aws-lambda-spp-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aws-lambda-spp-api:latest
+    ports:
+      - "9001:8080"
+    volumes:
+      # - ./app:/var/task
+      - ./tmp:/tmp
+    env_file:
+      - .env
