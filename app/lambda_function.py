@@ -1,101 +1,19 @@
-import os
-import pytz
-import boto3
-import pandas as pd
-from tqdm import tqdm
-import yfinance as yf
-from decimal import Decimal
-from joblib import load, dump
 from datetime import datetime, timedelta
+from decimal import Decimal
+import os
+import boto3
 from boto3.dynamodb.conditions import Key
-from aws_lambda_context import LambdaContext
+import pandas as pd
+from joblib import load, dump
+import yfinance as yf
+import pytz
 from sklearn.linear_model import PassiveAggressiveRegressor
-
-
-def split_target_and_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    split target and features
-    目的変数:xと説明変数:yに分割する
-    """
-    drop_columns = ["date", "time", "close"]
-    y = df["close"]
-    x = df.drop(drop_columns, axis=1)
-
-    return x, y
-
-
-def shift_dataFrame(df: pd.DataFrame, shift_rows: int) -> pd.DataFrame:
-    """
-    shift dataFrame
-    shift_rows時間後の終値を予測するために、shift_rows行分だけデータをずらす
-    """
-    df_shifted = df.copy()
-    df_shifted["close"] = df_shifted["close"].shift(-shift_rows)
-    df_shifted.dropna(inplace=True, subset=["close"])
-
-    return df_shifted
-
-
-def post_process_stock_data_from_dynamodb(
-    df: pd.DataFrame,
-    df_col_order: list,
-) -> pd.DataFrame:
-    """
-    post process stock data from dynamodb
-    dynamodbから取得したデータは、カラムの順番や行の順番がバラバラなので、整形する
-    """
-    df = df.reindex(columns=df_col_order)
-    df["datetime"] = pd.to_datetime(df["date"] + " " + df["time"])
-    df = df.sort_values(by=["datetime"])
-    df = df.drop(["datetime"], axis=1)
-    df = df.reset_index(drop=True)
-
-    return df
-
-
-def get_data_for_period_from_yfinance(
-    target_stock: str,
-    start_date: str,
-    end_date: str,
-    interval: str,
-    df_col_order: list,
-) -> pd.DataFrame:
-    """
-    get data from yfinance
-    yfinanceからstart_dateからend_dateまでのデータを取得する
-    """
-    # get data from yahoo finance
-    df = yf.download(
-        tickers=target_stock, start=start_date, end=end_date, interval=interval
-    )
-    if df.empty:
-        print("fail to get data from yahoo finance")
-        raise Exception("fail to get data from yahoo finance. data is empty")
-    else:
-        print("success to get data from yahoo finance")
-        print("rows : " + str(len(df)))
-
-    # reset index and rename column
-    df.reset_index(inplace=True, drop=False)
-
-    # column name to lower
-    df.columns = df.columns.str.lower()
-
-    # rename column
-    df.rename(columns={"date": "datetime"}, inplace=True)
-    df.rename(columns={"adj close": "adj_close"}, inplace=True)
-
-    # datetime to split date and time
-    df["date"] = df["datetime"].apply(lambda x: x.date().isoformat())
-    df["time"] = df["datetime"].apply(lambda x: x.time().isoformat())
-
-    # drop col id,datetime
-    df = df.drop(["id", "datetime"], axis=1)
-
-    # sort columns
-    df = df.reindex(columns=df_col_order)
-
-    return df
+from tqdm import tqdm
+from aws_lambda_context import LambdaContext
+from modules.data_preprocessing import (
+    post_process_stock_data_from_dynamodb,
+    shift_dataframe,
+)
 
 
 def handler(event: dict, context: LambdaContext | None) -> dict:
@@ -106,15 +24,19 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
     stock_name: str = os.environ["STOCK_NAME"]
     period: str = os.environ["PERIOD"]
     interval: str = os.environ["INTERVAL"]
-    df_col_order: list = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
-    model_num = int(os.environ["MODEL_NUM"])
     aws_region_name: str = os.environ["REGION_NAME"]
     aws_access_key_id: str = os.environ["ACCESS_KEY_ID"]
     aws_secret_access_key: str = os.environ["SECRET_ACCESS_KEY"]
     aws_s3_bucket_name: str = os.environ["AWS_S3_BUCKET_NAME"]
-    dynamodb_stock_table_name: str = "stock_price_predictor_" + stock_name
-    dynamodb_pred_table_name: str = dynamodb_stock_table_name + "_prediction"
-    dynamo_limit_table_name: str = "stock_price_predictor_limit_value"
+    dynamodb_stock_table_name: str = os.environ["AWS_DYNAMODB_STOCK_TABLE_NAME"]
+    dynamodb_prediction_table_name: str = os.environ[
+        "AWS_DYNAMODB_PREDICTION_TABLE_NAME"
+    ]
+    dynamo_limit_table_name: str = os.environ["AWS_DYNAMODB_LIMIT_TABLE_NAME"]
+    df_col_order: list[str] = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
+    model_num = int(os.environ["MODEL_NUM"])
+    features_columns: list[str] = os.environ["FEATURES_COLUMNS"].split(",")
+    target_column: str = os.environ["TARGET_COLUM"]
 
     JST = pytz.timezone(timezone)
 
@@ -132,7 +54,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
         aws_secret_access_key=aws_secret_access_key,
     )
     stock_table = dynamodb.Table(dynamodb_stock_table_name)
-    prediction_table = dynamodb.Table(dynamodb_pred_table_name)
+    prediction_table = dynamodb.Table(dynamodb_prediction_table_name)
     limit_table = dynamodb.Table(dynamo_limit_table_name)
 
     # check handler
@@ -223,9 +145,6 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             for key in tqdm(only_key_prediction_df.to_dict("records")):
                 prediction_table.delete_item(Key=key)
 
-            print("step2: complete")
-            print("delete all item in pred table process is complete")
-
         print("step3: upload limit value to dynamodb")
         limit_table.put_item(
             Item={
@@ -247,7 +166,6 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
         print("step1: get all item from dynamodb stock table", end="")
         train_df = pd.DataFrame(stock_table.scan()["Items"])
         train_df = post_process_stock_data_from_dynamodb(train_df, df_col_order)
-        print("...complete")
 
         print("step2: init and retrain model then dump to .pkl then upload s3")
         for i in tqdm(range(1, model_num + 1)):
@@ -256,15 +174,15 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             )
             model_local_path = f"{tmp_dir}/{model_file_name}"
 
-            shifted_train_df = shift_dataFrame(train_df, i)
-            x, y = split_target_and_features(shifted_train_df)
+            shifted_train_df = shift_dataframe(train_df, i, target_column)
+            x = shifted_train_df[features_columns]
+            y = shifted_train_df[target_column]
             model = PassiveAggressiveRegressor()
             model.fit(x, y)
             dump(model, model_local_path)
             s3.Bucket(aws_s3_bucket_name).upload_file(
                 model_local_path, f"models/{model_file_name}"
             )
-        print("step2: complete")
 
         print("step3: upload limit value to dynamodb")
         limit_table.put_item(
@@ -432,7 +350,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
         )
 
         # 予測するデータを目的変数と説明変数に分割
-        x, _ = split_target_and_features(unpredicted_df)
+        x = unpredicted_df[features_columns]
 
         # 新たに予測したデータを格納するdfの作成
         update_prediction_df = pd.DataFrame()
@@ -557,8 +475,11 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             s3.Bucket(aws_s3_bucket_name).download_file(
                 f"models/{model_file_name}", model_local_path
             )
-            train_df = shift_dataFrame(untrained_df, i)
-            x, y = split_target_and_features(train_df)
+            train_df = shift_dataframe(
+                df=untrained_df, shift_rows=i, target_col=target_column
+            )
+            x = train_df[features_columns]
+            y = train_df[target_column]
             model = load(model_local_path)
             model.partial_fit(x, y)
             dump(model, model_local_path)
