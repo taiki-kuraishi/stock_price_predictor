@@ -7,6 +7,4 @@ from lambda_function import lambda_handler
 
 if __name__ == "__main__":
     load_dotenv(dotenv_path="../.env", verbose=True, override=True)
-    event = {"handler": "latest"}
-    context = {}
-    lambda_handler(event, context)
+    print(lambda_handler({"handler": "latest"}, None))
