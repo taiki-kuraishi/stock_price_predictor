@@ -1,609 +1,508 @@
+from datetime import datetime, timedelta
+from decimal import Decimal
 import os
-import json
+import boto3
+from boto3.dynamodb.conditions import Key
 import pandas as pd
+from joblib import load, dump
+import yfinance as yf
+import pytz
+from sklearn.linear_model import PassiveAggressiveRegressor
 from tqdm import tqdm
-from joblib import dump
-from dotenv import load_dotenv
-from modules.dataframe_operations import (
+from aws_lambda_context import LambdaContext
+from modules.data_preprocessing import (
     post_process_stock_data_from_dynamodb,
-    get_latest_stock_data,
-    get_rows_not_in_other_df,
-)
-from modules.dynamodb_fetcher import (
-    get_data_from_dynamodb,
-    upload_dynamodb,
-    delete_data_from_dynamodb,
-    init_stock_table_dynamodb,
-)
-from modules.model_operations import (
-    init_and_retrain_model,
-    incremental_learning,
-    make_predictions,
-)
-from modules.s3_fetcher import (
-    download_model_from_s3,
-    upload_model_to_s3,
+    shift_dataframe,
 )
 
 
-def handler(event, context):
+def handler(event: dict, context: LambdaContext | None) -> dict:
     # read env
-    load_dotenv(dotenv_path="../.env", override=True)
-    tmp_dir: str = os.getenv("TMP_DIR")
-    target_stock: str = os.getenv("TARGET_STOCK")
-    stock_name: str = os.getenv("STOCK_NAME")
-    period: str = os.getenv("PERIOD")
-    interval: str = os.getenv("INTERVAL")
-    df_col_order: list = os.getenv("DTAFRAME_COLUMNS_ORDER").split(",")
-    model_num = int(os.getenv("MODEL_NUM"))
-    aws_region_name: str = os.getenv("AWS_REGION_NAME")
-    aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_s3_bucket_name: str = os.getenv("AWS_S3_BUCKET_NAME")
-    dynamodb_stock_table_name = "spp_" + stock_name
-    dynamodb_train_table_name = "spp_" + stock_name + "_trained"
-    dynamo_pred_table_name = "spp_" + stock_name + "_pred"
-    thread_pool_size = int(os.getenv("THREAD_POOL_SIZE"))
+    timezone: str = os.environ["TIMEZONE"]
+    tmp_dir: str = os.environ["TMP_DIR"]
+    target_stock: str = os.environ["TARGET_STOCK"]
+    stock_name: str = os.environ["STOCK_NAME"]
+    period: str = os.environ["PERIOD"]
+    interval: str = os.environ["INTERVAL"]
+    aws_region_name: str = os.environ["REGION_NAME"]
+    aws_access_key_id: str = os.environ["ACCESS_KEY_ID"]
+    aws_secret_access_key: str = os.environ["SECRET_ACCESS_KEY"]
+    aws_s3_bucket_name: str = os.environ["AWS_S3_BUCKET_NAME"]
+    dynamodb_stock_table_name: str = os.environ["AWS_DYNAMODB_STOCK_TABLE_NAME"]
+    dynamodb_prediction_table_name: str = os.environ[
+        "AWS_DYNAMODB_PREDICTION_TABLE_NAME"
+    ]
+    dynamo_limit_table_name: str = os.environ["AWS_DYNAMODB_LIMIT_TABLE_NAME"]
+    df_col_order: list[str] = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
+    model_num = int(os.environ["MODEL_NUM"])
+    features_columns: list[str] = os.environ["FEATURES_COLUMNS"].split(",")
+    target_column: str = os.environ["TARGET_COLUM"]
 
-    # check env
-    if not all(
-        [
-            tmp_dir,
-            target_stock,
-            stock_name,
-            period,
-            interval,
-            df_col_order,
-            model_num,
-            aws_region_name,
-            aws_access_key_id,
-            aws_secret_access_key,
-            aws_s3_bucket_name,
-        ]
-    ):
-        return {
-            "statusCode": 500,
-            "body": json.dumps(
-                {
-                    "message": "fail to read env. not all env are set",
-                }
-            ),
-        }
+    JST = pytz.timezone(timezone)
+
+    # aws instance
+    dynamodb = boto3.resource(
+        "dynamodb",
+        region_name=aws_region_name,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+    )
+    s3 = boto3.resource(
+        "s3",
+        region_name=aws_region_name,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+    )
+    stock_table = dynamodb.Table(dynamodb_stock_table_name)
+    prediction_table = dynamodb.Table(dynamodb_prediction_table_name)
+    limit_table = dynamodb.Table(dynamo_limit_table_name)
 
     # check handler
     if "handler" not in event:
+        return {"message": "no handler"}
+
+    # init limit table
+    if event["handler"] == "init_limit_table":
+        print("init limit table process is 1 steps")
+        print("step1: all clear dynamodb limit table")
+        limit_df_to_delete = pd.DataFrame(
+            limit_table.scan()["Items"],
+        )
+
+        if not limit_df_to_delete.empty:
+            only_key_df = limit_df_to_delete[["stock_id", "operation"]]
+
+            for key in tqdm(only_key_df.to_dict("records")):
+                limit_table.delete_item(Key=key)
+
+        print("init limit table process is complete")
         return {
-            "statusCode": 400,
-            "body": json.dumps(
-                {
-                    "message": "handler is not set",
-                }
-            ),
+            "message": "success to init limit table",
         }
 
     # init train table
-    if event["handler"] == "init_stock_table_from_s3":
-        # init dynamodb s3
-        try:
-            init_stock_table_dynamodb(
-                tmp_dir,
-                target_stock,
-                stock_name,
-                period,
-                interval,
-                df_col_order,
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_stock_table_name,
-                aws_s3_bucket_name,
-                thread_pool_size,
-                "s3",
-            )
-        except Exception as e:
-            print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to init dynamodb",
-                    }
-                ),
-            }
+    elif event["handler"] == "init_stock_table":
+        print("init stock table process is 5 steps")
+        print("step1: all clear dynamodb stock table")
+        stock_df_to_delete = pd.DataFrame(
+            stock_table.scan()["Items"],
+        )
 
-        return {
-            "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to init dynamodb",
-                }
-            ),
-        }
-    elif event["handler"] == "init_stock_table_from_yfinance":
-        # init dynamodb yfinance
-        try:
-            init_stock_table_dynamodb(
-                tmp_dir,
-                target_stock,
-                stock_name,
-                period,
-                interval,
-                df_col_order,
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_stock_table_name,
-                aws_s3_bucket_name,
-                thread_pool_size,
-                "yfinance",
-            )
-        except Exception as e:
-            print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to init dynamodb",
-                    }
-                ),
-            }
+        if not stock_df_to_delete.empty:
+            only_key_df = stock_df_to_delete[["date", "time"]]
 
+            for key in tqdm(only_key_df.to_dict("records")):
+                stock_table.delete_item(Key=key)
+
+        print("step2: download original stock data from s3")
+        file_name = f"spp_{stock_name}_{period}_{interval}.csv"
+        s3.Bucket(aws_s3_bucket_name).download_file(
+            f"csv/{file_name}", f"{tmp_dir}/{file_name}"
+        )
+        original_df = pd.read_csv(
+            f"{tmp_dir}/{file_name}", encoding="utf-8", index_col=None
+        )
+
+        # float型の値をDecimal型に変換
+        original_df = original_df.apply(
+            lambda x: x.map(lambda y: Decimal(str(y)) if isinstance(y, float) else y)
+        )
+
+        print("step3: upload original stock data to dynamodb")
+        with stock_table.batch_writer() as batch:
+            for item in tqdm(original_df.to_dict("records")):
+                batch.put_item(Item=item)
+
+        print("step4: upload limit value to dynamodb")
+        limit_table.put_item(
+            Item={
+                "stock_id": target_stock,
+                "operation": "stock",
+                "create_at": datetime.now(JST).isoformat(),
+                "max": pd.to_datetime(
+                    original_df.tail(1)["date"].values[0]
+                    + " "
+                    + original_df.tail(1)["time"].values[0]
+                ).isoformat(),
+            }
+        )
+
+        print("init stock table process is complete")
         return {
-            "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to init dynamodb",
-                }
-            ),
+            "message": "success to init dynamodb",
         }
 
     # delete all item in pred table
     elif event["handler"] == "delete_pred_table_item":
-        try:
-            print("delete all item in pred table process is 2 steps")
-            # pred tableからすべてのitemを取得
-            print("step1: get all item from dynamodb pred table", end="")
-            df = get_data_from_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamo_pred_table_name,
-            )
-            df = post_process_stock_data_from_dynamodb(df, df_col_order)
-            print("...complete")
+        print("delete all item in pred table process is 3 steps")
+        print("step1: get all item from dynamodb pred table")
+        prediction_df_to_delete = pd.DataFrame(prediction_table.scan()["Items"])
 
-            if df.empty:
-                print("no item in pred table")
-                print("delete all item in pred table process is complete")
-                return {
-                    "statusCode": 200,
-                    "body": json.dumps(
-                        {
-                            "message": "no item in pred table",
-                        }
-                    ),
-                }
-
-            # pred tableからすべてのitemを削除
+        if not prediction_df_to_delete.empty:
             print("step2: delete all item from dynamodb pred table")
-            delete_data_from_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamo_pred_table_name,
-                df,
-            )
-            print("step2: complete")
-            print("delete all item in pred table process is complete")
-        except Exception as e:
-            print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to delete all item in pred table",
-                    }
-                ),
+            only_key_prediction_df = prediction_df_to_delete[["date", "time"]]
+
+            for key in tqdm(only_key_prediction_df.to_dict("records")):
+                prediction_table.delete_item(Key=key)
+
+        print("step3: upload limit value to dynamodb")
+        limit_table.put_item(
+            Item={
+                "stock_id": target_stock,
+                "operation": "prediction",
+                "create_at": datetime.now(JST).isoformat(),
+                "max": "0",
             }
+        )
+
+        print("delete all item in pred table process is complete")
         return {
-            "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to delete all item in pred table",
-                }
-            ),
+            "message": "success to delete all item in pred table",
         }
 
     # init model
     elif event["handler"] == "init_model":
-        try:
-            print("init model process is 3 steps")
+        print("init model process is 3 steps")
+        print("step1: get all item from dynamodb stock table", end="")
+        train_df = pd.DataFrame(stock_table.scan()["Items"])
+        train_df = post_process_stock_data_from_dynamodb(train_df, df_col_order)
 
-            # download data from dynamodb
-            print("step1: get all item from dynamodb stock table", end="")
-            train_df = get_data_from_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_stock_table_name,
+        print("step2: init and retrain model then dump to .pkl then upload s3")
+        for i in tqdm(range(1, model_num + 1)):
+            model_file_name = (
+                f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
             )
-            train_df = post_process_stock_data_from_dynamodb(train_df, df_col_order)
-            print("...complete")
+            model_local_path = f"{tmp_dir}/{model_file_name}"
 
-            print("step2: init and retrain model then dump to .pkl then upload s3")
-            for i in tqdm(range(1, model_num + 1)):
-                # init and retrain model
-                model = init_and_retrain_model(train_df, i)
-
-                # model to .pkl
-                dump(
-                    model,
-                    f"{tmp_dir}/spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl",
-                )
-
-                # upload model to s3
-                upload_model_to_s3(
-                    tmp_dir,
-                    stock_name,
-                    i,
-                    model,
-                    aws_region_name,
-                    aws_access_key_id,
-                    aws_secret_access_key,
-                    aws_s3_bucket_name,
-                )
-            print("step2: complete")
-
-            # get all data from dynamodb
-            print("step3: init dynamodb trained table")
-            df_to_delete = get_data_from_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_train_table_name,
+            shifted_train_df = shift_dataframe(train_df, i, target_column)
+            x = shifted_train_df[features_columns]
+            y = shifted_train_df[target_column]
+            model = PassiveAggressiveRegressor()
+            model.fit(x, y)
+            dump(model, model_local_path)
+            s3.Bucket(aws_s3_bucket_name).upload_file(
+                model_local_path, f"models/{model_file_name}"
             )
-            print("step3: complete")
 
-            if not df_to_delete.empty:
-                print("train table is not empty")
-                print("step3.5 : delete all item from dynamodb train table")
-                # delete all data from dynamodb
-                delete_data_from_dynamodb(
-                    aws_region_name,
-                    aws_access_key_id,
-                    aws_secret_access_key,
-                    dynamodb_train_table_name,
-                    df_to_delete,
-                )
-                print("step3.5: complete")
-
-            # train_dfのid, datetime列を抽出
-            print("step4: upload trained data to dynamodb")
-            to_upload_train_df = train_df[["id", "datetime"]]
-            # upload train data to dynamodb
-            upload_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_train_table_name,
-                to_upload_train_df,
-            )
-            print("step4: complete")
-            print("init model process is complete")
-        except Exception as e:
-            print(e)
-            return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to init model",
-                    }
-                ),
+        print("step3: upload limit value to dynamodb")
+        limit_table.put_item(
+            Item={
+                "stock_id": target_stock,
+                "operation": "train",
+                "create_at": datetime.now(JST).isoformat(),
+                "max": pd.to_datetime(
+                    train_df.tail(1)["date"].values[0]
+                    + " "
+                    + train_df.tail()["time"].values[0]
+                ).isoformat(),
             }
+        )
+
+        print("init model process is complete")
         return {
-            "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to init model",
-                }
-            ),
+            "message": "success to init model",
         }
 
     # update stock table
     elif event["handler"] == "update_stock_table":
-        try:
-            print("update stock table process is 2 steps")
-            # 現在のstock tableのデータを取得
-            print("step1: get all item from dynamodb stock table", end="")
-            old_df = get_data_from_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_stock_table_name,
-            )
-            old_df = post_process_stock_data_from_dynamodb(old_df, df_col_order)
-            print("...complete")
+        print("update stock table process is 3 steps")
+        print("step1: get latest date from limit table")
+        latest_stock_date = limit_table.get_item(
+            Key={"stock_id": target_stock, "operation": "stock"}
+        )["Item"]
 
-            # get latest stock data
-            print("step2: get latest stock data")
-            latest_stock_df = get_latest_stock_data(
-                target_stock, interval, df_col_order, old_df
-            )
+        stock_max_datetime = pd.to_datetime(latest_stock_date["max"])
+        start_date = stock_max_datetime.strftime("%Y-%m-%d")
+        end_date = (datetime.now(JST) + timedelta(days=1)).strftime("%Y-%m-%d")
+        print("\tstart date : " + start_date)
+        print("\tend date : " + end_date)
 
-            if latest_stock_df is None:
-                print("no data to update")
-                return {
-                    "statusCode": 200,
-                    "body": json.dumps(
-                        {
-                            "message": "no data to update",
-                        }
-                    ),
-                }
-            print("...complete")
+        print("step2: get latest stock data")
+        yfinance_response_df = yf.download(
+            tickers=target_stock, start=start_date, end=end_date, interval=interval
+        )
+        if yfinance_response_df.empty:
+            print("fail to get data from yahoo finance")
+            raise Exception("fail to get data from yahoo finance. data is empty")
 
-            # latest_stock_dfをs3のstock tableにアップロード
-            print("step3: upload latest stock data to dynamodb")
-            upload_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_stock_table_name,
-                latest_stock_df,
-                thread_pool_size,
-            )
-            print("step3: complete")
-            print("update stock table process is complete")
+        yfinance_response_df.reset_index(inplace=True, drop=False)
+        yfinance_response_df.columns = yfinance_response_df.columns.str.lower()
 
-        except Exception as e:
-            print(e)
+        # rename column
+        yfinance_response_df.rename(columns={"date": "datetime"}, inplace=True)
+        yfinance_response_df.rename(columns={"adj close": "adj_close"}, inplace=True)
+
+        yfinance_response_df["datetime"] = pd.to_datetime(
+            yfinance_response_df["datetime"]
+        )
+        # convert timezone
+        yfinance_response_df["datetime"] = yfinance_response_df[
+            "datetime"
+        ].dt.tz_convert(JST)
+
+        # delete timezone
+        yfinance_response_df["datetime"] = yfinance_response_df[
+            "datetime"
+        ].dt.tz_localize(None)
+
+        # すでに格納されているデータは除外
+        yfinance_response_df = yfinance_response_df[
+            yfinance_response_df["datetime"] > stock_max_datetime
+        ]
+
+        # datetime to split date and time
+        yfinance_response_df["date"] = yfinance_response_df["datetime"].apply(
+            lambda x: x.date().isoformat()
+        )
+        yfinance_response_df["time"] = yfinance_response_df["datetime"].apply(
+            lambda x: x.time().isoformat()
+        )
+
+        yfinance_response_df = yfinance_response_df.drop(["datetime"], axis=1)
+        yfinance_response_df = yfinance_response_df.reindex(columns=df_col_order)
+
+        # float型の値をDecimal型に変換
+        yfinance_response_df = yfinance_response_df.apply(
+            lambda x: x.map(lambda y: Decimal(str(y)) if isinstance(y, float) else y)
+        )
+
+        if yfinance_response_df.empty:
+            print("no data to update")
             return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to update stock table",
-                    }
-                ),
+                "message": "no data to update",
             }
+
+        print("step3: upload latest stock data to dynamodb")
+        with stock_table.batch_writer() as batch:
+            for item in tqdm(yfinance_response_df.to_dict("records")):
+                batch.put_item(Item=item)
+
+        print("step4: upload limit value to dynamodb")
+        limit_table.put_item(
+            Item={
+                "stock_id": target_stock,
+                "operation": "stock",
+                "create_at": datetime.now(JST).isoformat(),
+                "max": pd.to_datetime(
+                    yfinance_response_df.tail(1)["date"].values[0]
+                    + " "
+                    + yfinance_response_df.tail(1)["time"].values[0]
+                ).isoformat(),
+            }
+        )
+
+        print("update stock table process is complete")
         return {
-            "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to update stock table",
-                }
-            ),
+            "message": "success to update stock table",
         }
 
     # update predict table
     elif event["handler"] == "update_predict":
-        try:
-            print("update predict process is 3 steps")
+        print("update predict process is 3 steps")
+        print("step1: get latest date from limit table")
+        limit_prediction_date = limit_table.get_item(
+            Key={"stock_id": target_stock, "operation": "prediction"}
+        )["Item"]
 
-            # get all item from stock table
-            print("step1: get all item from dynamodb stock table", end="")
-            stock_df = get_data_from_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_stock_table_name,
-            )
-            stock_df = post_process_stock_data_from_dynamodb(stock_df, df_col_order)
-            print("...complete")
+        if limit_prediction_date["max"] == "0":
+            unpredicted_df = pd.DataFrame(stock_table.scan()["Items"])
+        else:
+            prediction_max_datetime = pd.to_datetime(limit_prediction_date["max"])
+            prediction_max_date = prediction_max_datetime.strftime("%Y-%m-%d")
+            prediction_max_time = prediction_max_datetime.strftime("%H:%M:%S")
 
-            # get all item from pred table
-            print("step2: get all item from dynamodb pred table", end="")
-            pred_df = get_data_from_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamo_pred_table_name,
-            )
-            pred_df = post_process_stock_data_from_dynamodb(pred_df, df_col_order)
-            print("...complete")
+            limit_stock_date = limit_table.get_item(
+                Key={"stock_id": target_stock, "operation": "stock"}
+            )["Item"]
+            predict_end_date = limit_stock_date["max"]
+            predict_start_date = prediction_max_date
+            print("\tpredict start date: " + predict_start_date)
+            print("\tpredict end date: " + predict_end_date)
 
-            # まだ予測していないデータを取得
-            unpredicted_df = get_rows_not_in_other_df(pred_df, stock_df)
+            unpredicted_df = pd.DataFrame()
 
-            # unpredicted_dfが空の場合は、予測するデータがないので、終了
-            if unpredicted_df.empty:
-                print("no data to predict")
-                print("update predict process is complete")
-                return {
-                    "statusCode": 200,
-                    "body": json.dumps(
-                        {
-                            "message": "no data to predict",
-                        }
-                    ),
-                }
-
-            # model download from s3
-            print("step3: download model from s3")
-            models = {}
-            for i in tqdm(range(1, model_num + 1)):
-                models[i] = download_model_from_s3(
-                    tmp_dir,
-                    stock_name,
-                    i,
-                    aws_region_name,
-                    aws_access_key_id,
-                    aws_secret_access_key,
-                    aws_s3_bucket_name,
+            while predict_start_date <= predict_end_date:
+                day_of_prediction_df = pd.DataFrame(
+                    stock_table.query(
+                        KeyConditionExpression=Key("date").eq(predict_start_date)
+                    )["Items"]
                 )
-            print("step3: complete")
+                # すでに予測済みのデータは除外
+                if predict_start_date == prediction_max_date:
+                    day_of_prediction_df = day_of_prediction_df[
+                        day_of_prediction_df["time"] > prediction_max_time
+                    ]
+                unpredicted_df = pd.concat([unpredicted_df, day_of_prediction_df])
+                predict_start_date = (
+                    datetime.strptime(predict_start_date, "%Y-%m-%d")
+                    + timedelta(days=1)
+                ).strftime("%Y-%m-%d")
 
-            # 新たに予測したデータを格納するdfの作成
-            update_pred_df = pd.DataFrame()
-            update_pred_df["datetime"] = unpredicted_df[["datetime"]]
-
-            # predict
-            print("step4: predict")
-            for key in tqdm(models.keys()):
-                # predict
-                y_predict = make_predictions(models[key], unpredicted_df)
-
-                # concat predict to unpredicted_df
-                update_pred_df[f"{key}_pred"] = y_predict
-
-            # unpredicted_dfから最も大きいidを取得
-            max_id = int(unpredicted_df["id"].max())
-
-            # update_pred_dfにid列を追加
-            update_pred_df["id"] = range(max_id + 1, max_id + 1 + len(update_pred_df))
-            print("step4: complete")
-
-            # update_pred_dfをs3のpred tableにアップロード
-            print("step5: upload predict data to dynamodb")
-            upload_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamo_pred_table_name,
-                update_pred_df,
-                thread_pool_size,
-            )
-            print("step5: complete")
-            print("update predict process is complete")
-        except Exception as e:
-            print(e)
+        if unpredicted_df.empty:
+            print("no data to predict")
             return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to update predict",
-                    }
-                ),
+                "message": "no data to predict",
             }
+
+        # カラムのソートと日付でソート
+        unpredicted_df = post_process_stock_data_from_dynamodb(
+            unpredicted_df, df_col_order
+        )
+
+        # 予測するデータを目的変数と説明変数に分割
+        x = unpredicted_df[features_columns]
+
+        # 新たに予測したデータを格納するdfの作成
+        update_prediction_df = pd.DataFrame()
+        update_prediction_df["date"] = unpredicted_df[["date"]]
+        update_prediction_df["time"] = unpredicted_df[["time"]]
+
+        # model download from s3
+        print("step2: download model from s3")
+        for i in tqdm(range(1, model_num + 1)):
+            model_file_name = (
+                f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
+            )
+            model_local_path = f"{tmp_dir}/{model_file_name}"
+            s3.Bucket(aws_s3_bucket_name).download_file(
+                f"models/{model_file_name}", model_local_path
+            )
+            model = load(model_local_path)
+            update_prediction_df[str(i)] = model.predict(x)
+
+        # convert float to decimal
+        update_prediction_df = update_prediction_df.apply(
+            lambda x: x.map(lambda y: Decimal(str(y)) if isinstance(y, float) else y)
+        )
+
+        # create_at column
+        update_prediction_df["create_at"] = datetime.now(JST).isoformat()
+
+        print("To update dataFrame : \n")
+        print(update_prediction_df)
+
+        print("step5: upload predict data to dynamodb")
+        with prediction_table.batch_writer() as batch:
+            for item in tqdm(update_prediction_df.to_dict("records")):
+                batch.put_item(Item=item)
+
+        print("step6: upload limit value to dynamodb")
+        limit_table.put_item(
+            Item={
+                "stock_id": target_stock,
+                "operation": "prediction",
+                "create_at": datetime.now(JST).isoformat(),
+                "max": pd.to_datetime(
+                    update_prediction_df.tail(1)["date"].values[0]
+                    + " "
+                    + update_prediction_df.tail(1)["time"].values[0]
+                ).isoformat(),
+            }
+        )
+
+        print("update predict process is complete")
         return {
-            "statusCode": 200,
-            "body": json.dumps(
-                {
-                    "message": "success to update predict",
-                }
-            ),
+            "message": "success to update predict",
+        }
+
+    # update_and_predict_tables
+    elif event["handler"] == "update_and_predict_tables":
+        print("update_and_predict_tables process")
+        update_stock_table_res = handler({"handler": "update_stock_table"}, context)
+        update_stock_table_res_message: str = update_stock_table_res["message"]
+
+        update_predict_res = handler({"handler": "update_predict"}, context)
+        update_predict_res_message: str = update_predict_res["message"]
+
+        print("update_and_predict_tables process is complete")
+
+        return {
+            "message": "success to update_and_predict_tables",
+            "update_stock_table": update_stock_table_res_message,
+            "update_predict": update_predict_res_message,
         }
 
     # update model
     elif event["handler"] == "update_model":
-        try:
-            print("update model process is 3 steps")
+        print("update model process is 3 steps")
+        print("step1: get all item from dynamodb stock table")
+        limit_train_date = limit_table.get_item(
+            Key={"stock_id": target_stock, "operation": "train"}
+        )["Item"]
+        # train_max_dateに1日足した日付から予測を開始する
+        train_max_date = (
+            pd.to_datetime(limit_train_date["max"]) + timedelta(days=1)
+        ).strftime("%Y-%m-%d")
 
-            # get all item from stock table
-            print("step1: get all item from dynamodb stock table", end="")
-            stock_df = get_data_from_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_stock_table_name,
+        limit_stock_date = limit_table.get_item(
+            Key={"stock_id": target_stock, "operation": "stock"}
+        )["Item"]
+
+        train_end_date = pd.to_datetime(limit_stock_date["max"]).strftime("%Y-%m-%d")
+        print("\ttrain start date: " + train_max_date)
+        print("\ttrain end date: " + train_end_date)
+
+        untrained_df = pd.DataFrame()
+        date = train_max_date
+        while date <= train_end_date:
+            day_of_train_df = pd.DataFrame(
+                stock_table.query(KeyConditionExpression=Key("date").eq(date))["Items"]
             )
-            stock_df = post_process_stock_data_from_dynamodb(stock_df, df_col_order)
-            print("...complete")
-
-            # get all item from train table
-            print("step2: get all item from dynamodb train table", end="")
-            train_df = get_data_from_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_train_table_name,
+            untrained_df = pd.concat([untrained_df, day_of_train_df])
+            date = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime(
+                "%Y-%m-%d"
             )
-            train_df = post_process_stock_data_from_dynamodb(train_df, df_col_order)
-            print("...complete")
 
-            # 未学習のデータを抽出する
-            untrained_df = get_rows_not_in_other_df(train_df, stock_df)
-            untrained_length = len(untrained_df)
-            print(f"untrained data num : {untrained_length}")
-
-            # untrained_dfが空の場合は、学習するデータがないので、終了
-            if untrained_df.empty:
-                print("no data to train")
-                print("update model process is complete")
-                return {
-                    "statusCode": 200,
-                    "body": json.dumps(
-                        {
-                            "message": "no data to train",
-                        }
-                    ),
-                }
-
-            # model download from s3
-            print("step3: download model from s3")
-            models = {}
-            for i in tqdm(range(1, model_num + 1)):
-                models[i] = download_model_from_s3(
-                    tmp_dir,
-                    stock_name,
-                    i,
-                    aws_region_name,
-                    aws_access_key_id,
-                    aws_secret_access_key,
-                    aws_s3_bucket_name,
-                )
-            print("step3: complete")
-
-            # incrementally train
-            print("step4: train and convert to .pkl then upload s3")
-            for key in tqdm(models.keys()):
-                model = incremental_learning(
-                    models[key], stock_df.tail(untrained_length + key), key
-                )
-                dump(
-                    model,
-                    f"{tmp_dir}/spp_{stock_name}_{str(key)}h_PassiveAggressiveRegressor.pkl",
-                )
-                upload_model_to_s3(
-                    tmp_dir,
-                    stock_name,
-                    key,
-                    model,
-                    aws_region_name,
-                    aws_access_key_id,
-                    aws_secret_access_key,
-                    aws_s3_bucket_name,
-                )
-            print("step4: complete")
-
-            # upload train data to dynamodb
-            print("step5: upload train data to dynamodb")
-            upload_dynamodb(
-                aws_region_name,
-                aws_access_key_id,
-                aws_secret_access_key,
-                dynamodb_train_table_name,
-                untrained_df,
-                thread_pool_size,
-            )
-            print("step5: complete")
-            print("update model process is complete")
-        except Exception as e:
-            print(e)
+        if untrained_df.empty:
+            print("no data to train")
             return {
-                "statusCode": 500,
-                "body": json.dumps(
-                    {
-                        "message": "fail to update model",
-                    }
-                ),
+                "message": "no data to train",
             }
+
+        # カラムのソートと日付でソート
+        untrained_df = post_process_stock_data_from_dynamodb(untrained_df, df_col_order)
+
+        print("untrained_df : \n")
+        print(untrained_df)
+
+        # model download from s3
+        print("step2: download model and incremental learning and upload s3")
+        for i in tqdm(range(1, model_num + 1)):
+            model_file_name = (
+                f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
+            )
+            model_local_path = f"{tmp_dir}/{model_file_name}"
+            s3.Bucket(aws_s3_bucket_name).download_file(
+                f"models/{model_file_name}", model_local_path
+            )
+            train_df = shift_dataframe(
+                df=untrained_df, shift_rows=i, target_col=target_column
+            )
+            x = train_df[features_columns]
+            y = train_df[target_column]
+            model = load(model_local_path)
+            model.partial_fit(x, y)
+            dump(model, model_local_path)
+            s3.Bucket(aws_s3_bucket_name).upload_file(
+                model_local_path, f"models/{model_file_name}"
+            )
+
+        print("step4: upload limit value to dynamodb")
+        limit_table.put_item(
+            Item={
+                "stock_id": target_stock,
+                "operation": "train",
+                "create_at": datetime.now(JST).isoformat(),
+                "max": train_end_date,
+            }
+        )
+
+        print("update model process is complete")
+        return {
+            "message": "success to update model",
+        }
 
     else:
         return {
-            "statusCode": 400,
-            "body": json.dumps(
-                {
-                    "message": "wrong handler",
-                }
-            ),
+            "message": "wrong handler",
         }
-
-
-if __name__ == "__main__":
-    handler({"handler": "init_stock_table_from_s3"}, None)
-    # handler({"handler": "init_stock_table_from_yfinance"}, None)
-    handler({"handler": "delete_pred_table_item"}, None)
-    handler({"handler": "init_model"}, None)
-    handler({"handler": "update_predict"}, None)
-    handler({"handler": "update_stock_table"}, None)
-    handler({"handler": "update_model"}, None)
