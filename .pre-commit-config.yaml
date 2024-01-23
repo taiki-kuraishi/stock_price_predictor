@@ -1,10 +1,15 @@
 #!/usr/bin/env sh
 repos:
-    - repo: local
-      hooks:
-          - id: docker-compose-check
-            name: Run docker-compose build
-            entry: docker-compose build
-            language: system
-            pass_filenames: false
-            stages: [commit]
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 23.12.1
+    hooks:
+      - id: black
+        language_version: python3.12
+  - repo: local
+    hooks:
+      - id: docker-compose-check
+        name: Run docker-compose build
+        entry: docker-compose build
+        language: system
+        pass_filenames: false
+        stages: [commit]
