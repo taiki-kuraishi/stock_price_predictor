@@ -6,6 +6,7 @@
         "tqdm",
         "yfinance",
         "joblib",
-        "dotenv"
+        "dotenv",
+        "isort"
     ]
 }
