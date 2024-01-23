@@ -72,16 +72,16 @@ def lambda_handler(event: dict, context: LambdaContext):
         }
 
         # predictionBaseTimeからhourを取得
-        predictionBaseHour = prediction_dict["datetime"].hour
+        prediction_base_hour = prediction_dict["datetime"].hour
 
         # creation_datetimeの時間がtime_listにない場合は、最も近い時間を取得
-        if predictionBaseHour not in time_list:
+        if prediction_base_hour not in time_list:
             # time_listの中で最も近い時間を取得
-            predictionBaseHour = min(
-                time_list, key=lambda x: abs(x - predictionBaseHour)
+            prediction_base_hour = min(
+                time_list, key=lambda x: abs(x - prediction_base_hour)
             )
 
-        time_list_index = time_list.index(predictionBaseHour)
+        time_list_index = time_list.index(prediction_base_hour)
 
         # pred_time
         pred_time = prediction_dict["datetime"]
