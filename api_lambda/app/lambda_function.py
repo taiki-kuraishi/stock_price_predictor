@@ -1,3 +1,6 @@
+"""
+This module is used to predict stock prices using AWS Lambda and DynamoDB.
+"""
 import os
 from datetime import datetime
 import pytz
