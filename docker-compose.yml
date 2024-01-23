@@ -12,7 +12,7 @@ services:
     volumes:
       - ./tmp:/tmp
     env_file:
-      - ./ml_lambda/.env
+      - ./ml_lambda/.env.ml
 
   api-lambda:
     container_name: stock-price-predicttor-api-lambda
@@ -25,4 +25,4 @@ services:
     volumes:
       - ./tmp:/tmp
     env_file:
-      - ./api_lambda/.env
+      - ./api_lambda/.env.api

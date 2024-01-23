@@ -8,7 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../../ml_lambda/app/"))
 from ml_lambda.app.lambda_function import handler
 
 if __name__ == "__main__":
-    load_dotenv(dotenv_path="../../ml_lambda/.env", override=True, verbose=True)
+    load_dotenv(dotenv_path="../../ml_lambda/.env.ml", override=True, verbose=True)
     handler({"handler": ""}, None)
     print(handler({"handler": "init_limit_table"}, None))
     print(handler({"handler": "init_stock_table"}, None))
