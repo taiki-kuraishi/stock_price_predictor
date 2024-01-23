@@ -7,6 +7,9 @@
         "yfinance",
         "joblib",
         "dotenv",
-        "isort"
+        "isort",
+        "mypy",
+        "pylint",
+        "venv"
     ]
 }
