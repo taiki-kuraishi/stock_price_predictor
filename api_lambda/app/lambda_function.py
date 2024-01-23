@@ -21,9 +21,7 @@ def lambda_handler(event: dict, context: LambdaContext):
     secret_access_key: str = os.environ["SECRET_ACCESS_KEY"]
     time_list: list[int] = [int(i) for i in os.environ["TIME_LIST"].split(",")]
     dict_order: list[str] = os.environ["DICT_ORDER"].split(",")
-    dynamodb_pred_table_name: str = (
-        "stock_price_predictor_" + stock_name + "_prediction"
-    )
+    dynamodb_pred_table_name: str = "stock_price_predictor_" + stock_name + "_prediction"
 
     # set timezone
     jst = pytz.timezone(timezone)
@@ -45,9 +43,7 @@ def lambda_handler(event: dict, context: LambdaContext):
     if event["handler"] == "latest":
         todays_date = datetime.now(jst).strftime("%Y-%m-%d")
 
-        response = table.query(KeyConditionExpression=Key("date").eq(todays_date))[
-            "Items"
-        ]
+        response = table.query(KeyConditionExpression=Key("date").eq(todays_date))["Items"]
 
         if len(response) != 0:
             # datetimeでソート
@@ -80,9 +76,7 @@ def lambda_handler(event: dict, context: LambdaContext):
         # creation_datetimeの時間がtime_listにない場合は、最も近い時間を取得
         if prediction_base_hour not in time_list:
             # time_listの中で最も近い時間を取得
-            prediction_base_hour = min(
-                time_list, key=lambda x: abs(x - prediction_base_hour)
-            )
+            prediction_base_hour = min(time_list, key=lambda x: abs(x - prediction_base_hour))
 
         time_list_index = time_list.index(prediction_base_hour)
 

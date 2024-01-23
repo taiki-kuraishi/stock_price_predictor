@@ -29,9 +29,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
     aws_secret_access_key: str = os.environ["SECRET_ACCESS_KEY"]
     aws_s3_bucket_name: str = os.environ["AWS_S3_BUCKET_NAME"]
     dynamodb_stock_table_name: str = os.environ["AWS_DYNAMODB_STOCK_TABLE_NAME"]
-    dynamodb_prediction_table_name: str = os.environ[
-        "AWS_DYNAMODB_PREDICTION_TABLE_NAME"
-    ]
+    dynamodb_prediction_table_name: str = os.environ["AWS_DYNAMODB_PREDICTION_TABLE_NAME"]
     dynamo_limit_table_name: str = os.environ["AWS_DYNAMODB_LIMIT_TABLE_NAME"]
     df_col_order: list[str] = os.environ["DTAFRAME_COLUMNS_ORDER"].split(",")
     model_num = int(os.environ["MODEL_NUM"])
@@ -96,12 +94,8 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
         print("step2: download original stock data from s3")
         file_name = f"spp_{stock_name}_{period}_{interval}.csv"
-        s3.Bucket(aws_s3_bucket_name).download_file(
-            f"csv/{file_name}", f"{tmp_dir}/{file_name}"
-        )
-        original_df = pd.read_csv(
-            f"{tmp_dir}/{file_name}", encoding="utf-8", index_col=None
-        )
+        s3.Bucket(aws_s3_bucket_name).download_file(f"csv/{file_name}", f"{tmp_dir}/{file_name}")
+        original_df = pd.read_csv(f"{tmp_dir}/{file_name}", encoding="utf-8", index_col=None)
 
         # float型の値をDecimal型に変換
         original_df = original_df.apply(
@@ -169,9 +163,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
         print("step2: init and retrain model then dump to .pkl then upload s3")
         for i in tqdm(range(1, model_num + 1)):
-            model_file_name = (
-                f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
-            )
+            model_file_name = f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
             model_local_path = f"{tmp_dir}/{model_file_name}"
 
             shifted_train_df = shift_dataframe(train_df, i, target_column)
@@ -180,9 +172,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             model = PassiveAggressiveRegressor()
             model.fit(x, y)
             dump(model, model_local_path)
-            s3.Bucket(aws_s3_bucket_name).upload_file(
-                model_local_path, f"models/{model_file_name}"
-            )
+            s3.Bucket(aws_s3_bucket_name).upload_file(model_local_path, f"models/{model_file_name}")
 
         print("step3: upload limit value to dynamodb")
         limit_table.put_item(
@@ -191,9 +181,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                 "operation": "train",
                 "create_at": datetime.now(JST).isoformat(),
                 "max": pd.to_datetime(
-                    train_df.tail(1)["date"].values[0]
-                    + " "
-                    + train_df.tail()["time"].values[0]
+                    train_df.tail(1)["date"].values[0] + " " + train_df.tail()["time"].values[0]
                 ).isoformat(),
             }
         )
@@ -232,18 +220,12 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
         yfinance_response_df.rename(columns={"date": "datetime"}, inplace=True)
         yfinance_response_df.rename(columns={"adj close": "adj_close"}, inplace=True)
 
-        yfinance_response_df["datetime"] = pd.to_datetime(
-            yfinance_response_df["datetime"]
-        )
+        yfinance_response_df["datetime"] = pd.to_datetime(yfinance_response_df["datetime"])
         # convert timezone
-        yfinance_response_df["datetime"] = yfinance_response_df[
-            "datetime"
-        ].dt.tz_convert(JST)
+        yfinance_response_df["datetime"] = yfinance_response_df["datetime"].dt.tz_convert(JST)
 
         # delete timezone
-        yfinance_response_df["datetime"] = yfinance_response_df[
-            "datetime"
-        ].dt.tz_localize(None)
+        yfinance_response_df["datetime"] = yfinance_response_df["datetime"].dt.tz_localize(None)
 
         # すでに格納されているデータは除外
         yfinance_response_df = yfinance_response_df[
@@ -323,9 +305,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
 
             while predict_start_date <= predict_end_date:
                 day_of_prediction_df = pd.DataFrame(
-                    stock_table.query(
-                        KeyConditionExpression=Key("date").eq(predict_start_date)
-                    )["Items"]
+                    stock_table.query(KeyConditionExpression=Key("date").eq(predict_start_date))[
+                        "Items"
+                    ]
                 )
                 # すでに予測済みのデータは除外
                 if predict_start_date == prediction_max_date:
@@ -334,8 +316,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                     ]
                 unpredicted_df = pd.concat([unpredicted_df, day_of_prediction_df])
                 predict_start_date = (
-                    datetime.strptime(predict_start_date, "%Y-%m-%d")
-                    + timedelta(days=1)
+                    datetime.strptime(predict_start_date, "%Y-%m-%d") + timedelta(days=1)
                 ).strftime("%Y-%m-%d")
 
         if unpredicted_df.empty:
@@ -345,9 +326,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             }
 
         # カラムのソートと日付でソート
-        unpredicted_df = post_process_stock_data_from_dynamodb(
-            unpredicted_df, df_col_order
-        )
+        unpredicted_df = post_process_stock_data_from_dynamodb(unpredicted_df, df_col_order)
 
         # 予測するデータを目的変数と説明変数に分割
         x = unpredicted_df[features_columns]
@@ -360,9 +339,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
         # model download from s3
         print("step2: download model from s3")
         for i in tqdm(range(1, model_num + 1)):
-            model_file_name = (
-                f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
-            )
+            model_file_name = f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
             model_local_path = f"{tmp_dir}/{model_file_name}"
             s3.Bucket(aws_s3_bucket_name).download_file(
                 f"models/{model_file_name}", model_local_path
@@ -430,9 +407,9 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
             Key={"stock_id": target_stock, "operation": "train"}
         )["Item"]
         # train_max_dateに1日足した日付から予測を開始する
-        train_max_date = (
-            pd.to_datetime(limit_train_date["max"]) + timedelta(days=1)
-        ).strftime("%Y-%m-%d")
+        train_max_date = (pd.to_datetime(limit_train_date["max"]) + timedelta(days=1)).strftime(
+            "%Y-%m-%d"
+        )
 
         limit_stock_date = limit_table.get_item(
             Key={"stock_id": target_stock, "operation": "stock"}
@@ -449,9 +426,7 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
                 stock_table.query(KeyConditionExpression=Key("date").eq(date))["Items"]
             )
             untrained_df = pd.concat([untrained_df, day_of_train_df])
-            date = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime(
-                "%Y-%m-%d"
-            )
+            date = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
 
         if untrained_df.empty:
             print("no data to train")
@@ -468,24 +443,18 @@ def handler(event: dict, context: LambdaContext | None) -> dict:
         # model download from s3
         print("step2: download model and incremental learning and upload s3")
         for i in tqdm(range(1, model_num + 1)):
-            model_file_name = (
-                f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
-            )
+            model_file_name = f"spp_{stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
             model_local_path = f"{tmp_dir}/{model_file_name}"
             s3.Bucket(aws_s3_bucket_name).download_file(
                 f"models/{model_file_name}", model_local_path
             )
-            train_df = shift_dataframe(
-                df=untrained_df, shift_rows=i, target_col=target_column
-            )
+            train_df = shift_dataframe(df=untrained_df, shift_rows=i, target_col=target_column)
             x = train_df[features_columns]
             y = train_df[target_column]
             model = load(model_local_path)
             model.partial_fit(x, y)
             dump(model, model_local_path)
-            s3.Bucket(aws_s3_bucket_name).upload_file(
-                model_local_path, f"models/{model_file_name}"
-            )
+            s3.Bucket(aws_s3_bucket_name).upload_file(model_local_path, f"models/{model_file_name}")
 
         print("step4: upload limit value to dynamodb")
         limit_table.put_item(
