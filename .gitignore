@@ -213,6 +213,7 @@ pyrightconfig.json
 [Ii]nclude
 [Ll]ib
 [Ll]ib64
+[Ss]cripts
 [Ll]ocal
 pyvenv.cfg
 pip-selfcheck.json
