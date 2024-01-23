@@ -1,0 +1,11 @@
+{
+    "ignoreWords": [
+        "boto",
+        "pytz",
+        "dataframe",
+        "tqdm",
+        "yfinance",
+        "joblib",
+        "dotenv"
+    ]
+}

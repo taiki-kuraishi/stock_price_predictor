@@ -1,0 +1,28 @@
+version: '3.9'
+
+services:
+  ml-lambda:
+    container_name: stock-price-predicttor-ml-lambda
+    build:
+      context: ./ml_lambda
+      dockerfile: Dockerfile
+    image: stock-price-predicttor-ml-lambda:latest
+    ports:
+      - "9000:8080"
+    volumes:
+      - ./tmp:/tmp
+    env_file:
+      - ./ml_lambda/.env.ml
+
+  api-lambda:
+    container_name: stock-price-predicttor-api-lambda
+    build:
+      context: ./api_lambda
+      dockerfile: Dockerfile
+    image: stock-price-predicttor-api-lambda:latest
+    ports:
+      - "9001:8080"
+    volumes:
+      - ./tmp:/tmp
+    env_file:
+      - ./api_lambda/.env.api

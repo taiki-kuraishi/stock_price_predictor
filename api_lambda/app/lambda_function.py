@@ -1,38 +1,41 @@
+"""
+This module is used to predict stock prices using AWS Lambda and DynamoDB.
+"""
 import os
-import boto3
-import pytz
-import pandas as pd
 from datetime import datetime
+import pytz
+import boto3
+import pandas as pd
 from boto3.dynamodb.conditions import Key
 from aws_lambda_context import LambdaContext
 
 
 def lambda_handler(event: dict, context: LambdaContext):
     # load env
-    SATURDAY: int = os.environ["SATURDAY"]
-    SUNDAY: int = os.environ["SUNDAY"]
-    TIMEZONE: str = os.environ["TIMEZONE"]
-    STOCK_NAME: str = os.environ["STOCK_NAME"]
-    REGION_NAME: str = os.environ["REGION_NAME"]
-    ACCESS_KEY_ID: str = os.environ["ACCESS_KEY_ID"]
-    SECRET_ACCESS_KEY: str = os.environ["SECRET_ACCESS_KEY"]
-    TIME_LIST: list[int] = [int(i) for i in os.environ["TIME_LIST"].split(",")]
-    DICT_ORDER: list[str] = os.environ["DICT_ORDER"].split(",")
-    DYNAMODB_PRED_TABLE_NAME: str = (
-        "stock_price_predictor_" + STOCK_NAME + "_prediction"
+    saturday: int = os.environ["SATURDAY"]
+    sunday: int = os.environ["SUNDAY"]
+    timezone: str = os.environ["TIMEZONE"]
+    stock_name: str = os.environ["STOCK_NAME"]
+    region_name: str = os.environ["REGION_NAME"]
+    access_key_id: str = os.environ["ACCESS_KEY_ID"]
+    secret_access_key: str = os.environ["SECRET_ACCESS_KEY"]
+    time_list: list[int] = [int(i) for i in os.environ["TIME_LIST"].split(",")]
+    dict_order: list[str] = os.environ["DICT_ORDER"].split(",")
+    dynamodb_pred_table_name: str = (
+        "stock_price_predictor_" + stock_name + "_prediction"
     )
 
     # set timezone
-    JST = pytz.timezone(TIMEZONE)
+    jst = pytz.timezone(timezone)
 
     # aws instance
     dynamodb = boto3.resource(
         "dynamodb",
-        region_name=REGION_NAME,
-        aws_access_key_id=ACCESS_KEY_ID,
-        aws_secret_access_key=SECRET_ACCESS_KEY,
+        region_name=region_name,
+        aws_access_key_id=access_key_id,
+        aws_secret_access_key=secret_access_key,
     )
-    table = dynamodb.Table(DYNAMODB_PRED_TABLE_NAME)
+    table = dynamodb.Table(dynamodb_pred_table_name)
 
     if "handler" not in event:
         return {
@@ -40,7 +43,7 @@ def lambda_handler(event: dict, context: LambdaContext):
         }
 
     if event["handler"] == "latest":
-        todays_date = datetime.now(JST).strftime("%Y-%m-%d")
+        todays_date = datetime.now(jst).strftime("%Y-%m-%d")
 
         response = table.query(KeyConditionExpression=Key("date").eq(todays_date))[
             "Items"
@@ -64,7 +67,7 @@ def lambda_handler(event: dict, context: LambdaContext):
             prediction_dict = response_df.tail(1).to_dict("records")[0]
 
         # sort dict key
-        prediction_dict = {key: prediction_dict[key] for key in DICT_ORDER}
+        prediction_dict = {key: prediction_dict[key] for key in dict_order}
 
         response_body = {
             "prediction_timestamp": prediction_dict["create_at"],
@@ -72,16 +75,16 @@ def lambda_handler(event: dict, context: LambdaContext):
         }
 
         # predictionBaseTimeからhourを取得
-        predictionBaseHour = prediction_dict["datetime"].hour
+        prediction_base_hour = prediction_dict["datetime"].hour
 
         # creation_datetimeの時間がtime_listにない場合は、最も近い時間を取得
-        if predictionBaseHour not in TIME_LIST:
+        if prediction_base_hour not in time_list:
             # time_listの中で最も近い時間を取得
-            predictionBaseHour = min(
-                TIME_LIST, key=lambda x: abs(x - predictionBaseHour)
+            prediction_base_hour = min(
+                time_list, key=lambda x: abs(x - prediction_base_hour)
             )
 
-        time_list_index = TIME_LIST.index(predictionBaseHour)
+        time_list_index = time_list.index(prediction_base_hour)
 
         # pred_time
         pred_time = prediction_dict["datetime"]
@@ -97,21 +100,21 @@ def lambda_handler(event: dict, context: LambdaContext):
         for key, value in prediction_dict.items():
             datetime_value = pred_time
 
-            if time_list_index + int(key) >= len(TIME_LIST):
+            if time_list_index + int(key) >= len(time_list):
                 datetime_value = datetime_value.replace(day=datetime_value.day + 1)
 
                 # weakDayが5,6(土、日)の場合は月曜日まで日付を進める
-                if datetime_value.weekday() == SATURDAY:
+                if datetime_value.weekday() == saturday:
                     datetime_value = datetime_value.replace(day=datetime_value.day + 2)
-                elif datetime_value.weekday() == SUNDAY:
+                elif datetime_value.weekday() == sunday:
                     datetime_value = datetime_value.replace(day=datetime_value.day + 1)
 
                 datetime_value = datetime_value.replace(
-                    hour=int(TIME_LIST[time_list_index + int(key) - len(TIME_LIST)])
+                    hour=int(time_list[time_list_index + int(key) - len(time_list)])
                 )
             else:
                 datetime_value = datetime_value.replace(
-                    hour=int(TIME_LIST[time_list_index + int(key)])
+                    hour=int(time_list[time_list_index + int(key)])
                 )
 
             response_body["prediction"][str(int(key)) + "_hour_prediction"] = {

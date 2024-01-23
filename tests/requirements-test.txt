@@ -1,0 +1,3 @@
+-r ../api_lambda/requirements.txt
+-r ../ml_lambda/requirements.txt
+python-dotenv==1.0.0

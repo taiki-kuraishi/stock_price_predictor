@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+repos:
+    - repo: local
+      hooks:
+          - id: docker-compose-check
+            name: Run docker-compose build
+            entry: docker-compose build
+            language: system
+            pass_filenames: false
+            stages: [commit]
