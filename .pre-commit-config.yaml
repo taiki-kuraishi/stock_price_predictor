@@ -22,12 +22,22 @@ repos:
     rev: v1.8.0
     hooks:
       - id: mypy
-        args: [--ignore-missing-imports, --show-column-numbers]
+        verbose: true
+        args: [--install-types, --strict]
+        additional_dependencies:
+          [
+            "boto3-stubs[essential]==1.20.0",
+            "mypy-boto3-dynamodb==1.20.0",
+            "mypy-boto3-s3==1.20.0",
+            "python-dotenv==0.19.2",
+          ]
 
   - repo: https://github.com/pycqa/pylint
     rev: v3.0.3
     hooks:
       - id: pylint
+        language: system
+        types: [python]
 
   - repo: local
     hooks:
