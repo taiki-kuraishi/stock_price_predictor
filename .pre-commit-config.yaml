@@ -48,6 +48,7 @@ repos:
       - id: pylint
         language: system
         types: [python]
+        args: [--output-format=colorized, --reports=yes]
 
   - repo: local
     hooks:
