@@ -5,55 +5,24 @@ It includes functions to initialize the limit table, initialize the stock table,
 delete the prediction table, and initialize all models.
 """
 import os
-from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from decimal import Decimal
 
 import boto3
 import pandas as pd
 import pytz
+from dataclass.configurations import (
+    AWSAuth,
+    DynamoDBTables,
+    LambdaConfiguration,
+    StockConfiguration,
+)
 from dotenv import load_dotenv
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_s3 import S3ServiceResource
 from mypy_boto3_s3.service_resource import Bucket
 from tqdm import tqdm
-
-
-@dataclass
-class LambdaConfiguration:
-    """Lambda configuration class."""
-
-    timezone: tzinfo
-    tmp_dir: str
-
-
-@dataclass
-class StockConfiguration:
-    """Stock configuration class."""
-
-    target_stock: str
-    stock_name: str
-    period: str
-    interval: str
-
-
-@dataclass
-class AWSAuth:
-    """AWS authentication class."""
-
-    region_name: str
-    access_key_id: str
-    secret_access_key: str
-
-
-@dataclass
-class DynamoDBTables:
-    """DynamoDB tables class."""
-
-    stock_table: Table
-    prediction_table: Table
-    limit_table: Table
 
 
 def init_limit_table(
@@ -211,7 +180,7 @@ def delete_prediction_table(
 
 
 if __name__ == "__main__":
-    load_dotenv(dotenv_path="../ml_lambda/.env.ml", override=True, verbose=True)
+    load_dotenv(override=True, verbose=True)
 
     lambda_configuration = LambdaConfiguration(
         pytz.timezone(os.environ["TIMEZONE"]), os.environ["TMP_DIR"]
@@ -239,9 +208,9 @@ if __name__ == "__main__":
     )
 
     dynamodb_tables = DynamoDBTables(
-        dynamodb.Table(os.environ["STOCK_TABLE"]),
-        dynamodb.Table(os.environ["PREDICTION_TABLE"]),
-        dynamodb.Table(os.environ["LIMIT_TABLE"]),
+        dynamodb.Table(os.environ["AWS_DYNAMODB_STOCK_TABLE_NAME"]),
+        dynamodb.Table(os.environ["AWS_DYNAMODB_PREDICTION_TABLE_NAME"]),
+        dynamodb.Table(os.environ["AWS_DYNAMODB_LIMIT_TABLE_NAME"]),
     )
 
     s3: S3ServiceResource = boto3.resource(
@@ -251,7 +220,7 @@ if __name__ == "__main__":
         aws_secret_access_key=aws_auth.secret_access_key,
     )
 
-    s3_bucket: Bucket = s3.Bucket(os.environ["BUCKET"])
+    s3_bucket: Bucket = s3.Bucket(os.environ["AWS_S3_BUCKET_NAME"])
 
     if "y" == input("Do you want to init limit table? [y/n]"):
         init_limit_table(dynamodb_tables.limit_table)
