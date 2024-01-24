@@ -43,3 +43,13 @@ class DynamoDBTables:
     stock_table: Table
     prediction_table: Table
     limit_table: Table
+
+
+@dataclass
+class ModelsConfiguration:
+    """Models configuration class."""
+
+    models_number: int
+    dataframe_columns_order: list[str]
+    features_columns: list[str]
+    target_column: str

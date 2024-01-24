@@ -15,13 +15,20 @@ from dataclass.configurations import (
     AWSAuth,
     DynamoDBTables,
     LambdaConfiguration,
+    ModelsConfiguration,
     StockConfiguration,
 )
 from dotenv import load_dotenv
+from joblib import dump
+from modules.data_preprocessing import (
+    post_process_stock_data_from_dynamodb,
+    shift_dataframe,
+)
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from mypy_boto3_dynamodb.service_resource import Table
 from mypy_boto3_s3 import S3ServiceResource
 from mypy_boto3_s3.service_resource import Bucket
+from sklearn.linear_model import PassiveAggressiveRegressor
 from tqdm import tqdm
 
 
@@ -179,6 +186,68 @@ def delete_prediction_table(
     )
 
 
+def init_models(
+    lambda_config: LambdaConfiguration,
+    stock_config: StockConfiguration,
+    tables: DynamoDBTables,
+    bucket: Bucket,
+    models_config: ModelsConfiguration,
+) -> None:
+    """
+    モデルを初期化し、訓練し、S3バケットにアップロードします。
+
+    この関数は、DynamoDBテーブルから株価データを取得し、それを用いて
+    PassiveAggressiveRegressorモデルを訓練します。訓練された各モデルは、
+    S3バケットにアップロードされます。最後に、制限テーブルが更新されます。
+
+    引数:
+    lambda_config: LambdaConfigurationオブジェクト。Lambda関数の設定を含みます。
+    stock_config: StockConfigurationオブジェクト。株価データの設定を含みます。
+    tables: DynamoDBTablesオブジェクト。DynamoDBテーブルの参照を含みます。
+    bucket: Bucketオブジェクト。S3バケットの参照を含みます。
+    models_config: ModelsConfigurationオブジェクト。モデルの設定を含みます。
+
+    戻り値:
+    なし
+
+    例外:
+    botocore.exceptions.BotoCoreError: AWS SDKによる操作中に問題が発生した場合に発生します。
+    """
+    # scan stock table
+    train_df = post_process_stock_data_from_dynamodb(
+        pd.DataFrame(tables.stock_table.scan()["Items"]),
+        models_config.dataframe_columns_order,
+    )
+
+    # train models and upload to s3 bucket
+    for i in tqdm(range(1, models_config.models_number + 1)):
+        model_file_name = (
+            f"spp_{stock_config.stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
+        )
+        model_local_path = f"{lambda_config.tmp_dir}/{model_file_name}"
+        shifted_train_df = shift_dataframe(train_df, i, models_config.target_column)
+        x = shifted_train_df[models_config.features_columns]
+        y = shifted_train_df[models_config.target_column]
+        model = PassiveAggressiveRegressor()
+        model.fit(x, y)
+        dump(model, model_local_path)
+        bucket.upload_file(model_local_path, f"models/{model_file_name}")
+
+    # update limit table
+    tables.limit_table.put_item(
+        Item={
+            "stock_id": stock_config.target_stock,
+            "operation": "train",
+            "create_at": datetime.now(lambda_config.timezone).isoformat(),
+            "max": pd.to_datetime(
+                train_df.tail(1)["date"].values[0]
+                + " "
+                + train_df.tail()["time"].values[0]
+            ).isoformat(),
+        }
+    )
+
+
 if __name__ == "__main__":
     load_dotenv(override=True, verbose=True)
 
@@ -197,6 +266,13 @@ if __name__ == "__main__":
         os.environ["REGION_NAME"],
         os.environ["ACCESS_KEY_ID"],
         os.environ["SECRET_ACCESS_KEY"],
+    )
+
+    models_configuration = ModelsConfiguration(
+        int(os.environ["MODEL_NUM"]),
+        os.environ["DATAFRAME_COLUMNS_ORDER"].split(","),
+        os.environ["FEATURES_COLUMNS"].split(","),
+        os.environ["TARGET_COLUM"],
     )
 
     # aws instance
@@ -240,4 +316,13 @@ if __name__ == "__main__":
             dynamodb_tables.limit_table,
             stock_configuration.target_stock,
             lambda_configuration.timezone,
+        )
+
+    if "y" == input("Do you want to init all models? [y/n]"):
+        init_models(
+            lambda_configuration,
+            stock_configuration,
+            dynamodb_tables,
+            s3_bucket,
+            models_configuration,
         )
