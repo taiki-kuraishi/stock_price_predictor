@@ -6,6 +6,13 @@
         "tqdm",
         "yfinance",
         "joblib",
-        "dotenv"
+        "dotenv",
+        "isort",
+        "mypy",
+        "pylint",
+        "venv",
+        "botocore",
+        "dropna",
+        "sklearn"
     ]
 }

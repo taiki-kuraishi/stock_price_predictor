@@ -1,10 +1,55 @@
 #!/usr/bin/env sh
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+
+  - repo: https://github.com/streetsidesoftware/cspell-cli
+    rev: v8.3.0
+    hooks:
+      - id: cspell
+        args: [--config, ".vscode/cspell.json"]
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.11.5
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+
   - repo: https://github.com/psf/black-pre-commit-mirror
     rev: 23.12.1
     hooks:
       - id: black
         language_version: python3.12
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        verbose: true
+        args: [--install-types, --strict]
+        additional_dependencies:
+          [
+            "boto3-stubs[essential]==1.20.0",
+            "mypy-boto3-dynamodb==1.20.0",
+            "mypy-boto3-s3==1.20.0",
+            "python-dotenv==0.19.2",
+          ]
+
+  - repo: https://github.com/pycqa/pylint
+    rev: v3.0.3
+    hooks:
+      - id: pylint
+        language: system
+        types: [python]
+        args: [--output-format=colorized, --reports=yes]
+
   - repo: local
     hooks:
       - id: docker-compose-check
