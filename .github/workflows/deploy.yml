@@ -3,7 +3,7 @@ name: deploy
 on:
   push:
     branches:
-      - github-actions-for-lambda
+      - main
 
 jobs:
   api_lambda_build_and_deploy:
