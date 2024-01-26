@@ -6,7 +6,7 @@ on:
       - github-actions-for-lambda
 
 jobs:
-  deploy:
+  api_lambda_build_and_deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,6 +34,24 @@ jobs:
           AWS_LAMBDA_FUNCTION_NAME: ${{ secrets.API_AWS_LAMBDA_FUNCTION_NAME }}
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ secrets.API_AWS_ECR_REPOSITORY_NAME }}
+
+  ml_lambda_build_and_deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: API Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
       - name: ML docker build & docker push & lambda update
         run: |
