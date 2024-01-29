@@ -14,5 +14,8 @@
         "botocore",
         "dropna",
         "sklearn"
+    ],
+    "ignorePaths": [
+        ".gitignore"
     ]
 }
