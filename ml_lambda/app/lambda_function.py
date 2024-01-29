@@ -13,6 +13,8 @@ import pandas as pd
 import pytz
 import yfinance as yf
 from aws_lambda_context import LambdaContext
+from boto3.dynamodb.conditions import Key
+from joblib import load
 from modules.configurations import (
     AWSAuth,
     DynamoDBTables,
@@ -20,7 +22,10 @@ from modules.configurations import (
     ModelsConfiguration,
     StockConfiguration,
 )
+from modules.data_preprocessing import post_process_stock_data_from_dynamodb
 from mypy_boto3_dynamodb import DynamoDBServiceResource
+from mypy_boto3_s3 import S3ServiceResource
+from mypy_boto3_s3.service_resource import Bucket
 from tqdm import tqdm
 
 
@@ -192,6 +197,172 @@ def update_stock_table(
     return len(yfinance_response_df)
 
 
+def generate_predict(
+    model_num: int,
+    stock_name: str,
+    tmp_dir: str,
+    bucket: Bucket,
+    x: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Generates stock price predictions using the specified model
+    and returns a DataFrame containing the predictions.
+
+    Parameters:
+    model_num (int): The number of the model to use,
+    which is included in the model's file name.
+    stock_name (str): The name of the stock for which to generate predictions,
+    which is included in the model's file name.
+    tmp_dir (str): The path to the directory
+    where the model file will be temporarily saved.
+    bucket (Bucket): The S3 bucket from which to download the model file.
+    x (pd.DataFrame): The input data for generating predictions.
+
+    Returns:
+    pd.DataFrame: A DataFrame containing the predictions.
+    Each prediction has the model's number as its column name.
+    """
+    model_file_name = (
+        f"spp_{stock_name}_{str(model_num)}h_PassiveAggressiveRegressor.pkl"
+    )
+    model_local_path = os.path.join(tmp_dir, model_file_name)
+    bucket.download_file(f"models/{model_file_name}", model_local_path)
+    model = load(model_local_path)
+    prediction = pd.DataFrame()
+    prediction[str(model_num)] = model.predict(x)
+    return prediction
+
+
+def update_predict(
+    lambda_config: LambdaConfiguration,
+    stock_config: StockConfiguration,
+    models_config: ModelsConfiguration,
+    tables: DynamoDBTables,
+    bucket: Bucket,
+) -> int:
+    """
+    Updates the stock price predictions.
+
+    Parameters
+    ----------
+    lambda_config : LambdaConfiguration
+        The configuration for the Lambda function.
+    stock_config : StockConfiguration
+        The configuration for the stock data.
+    models_config : ModelsConfiguration
+        The configuration for the models.
+    tables : DynamoDBTables
+        The DynamoDB tables.
+    bucket : Bucket
+        The S3 bucket.
+
+    Returns
+    -------
+    int
+        The number of updated predictions.
+    """
+    # get last update date
+    last_prediction_update_datetime = pd.to_datetime(
+        str(
+            tables.limit_table.get_item(
+                Key={"stock_id": stock_config.target_stock, "operation": "prediction"}
+            )["Item"]["max"]
+        )
+    )
+
+    if last_prediction_update_datetime == "0":
+        unpredicted_df = pd.DataFrame(tables.stock_table.scan()["Items"])
+
+    if last_prediction_update_datetime != "0":
+        last_stock_update_datetime = str(
+            tables.limit_table.get_item(
+                Key={"stock_id": stock_config.target_stock, "operation": "stock"}
+            )["Item"]["max"]
+        )
+
+        unpredicted_df = pd.DataFrame()
+        date = last_prediction_update_datetime.strftime("%Y-%m-%d")
+        while date <= last_stock_update_datetime:
+            day_of_prediction_df = pd.DataFrame(
+                tables.stock_table.query(KeyConditionExpression=Key("date").eq(date))[
+                    "Items"
+                ]
+            )
+            # すでに予測済みのデータは除外
+            if date == last_prediction_update_datetime.strftime("%Y-%m-%d"):
+                day_of_prediction_df = day_of_prediction_df[
+                    day_of_prediction_df["time"]
+                    > last_prediction_update_datetime.strftime("%H:%M:%S")
+                ]
+            unpredicted_df = pd.concat([unpredicted_df, day_of_prediction_df])
+            date = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime(
+                "%Y-%m-%d"
+            )
+
+    if unpredicted_df.empty:
+        return 0
+
+    # カラムのソートと日付でソート
+    unpredicted_df = post_process_stock_data_from_dynamodb(
+        unpredicted_df, models_config.dataframe_columns_order
+    )
+
+    # 新たに予測したデータを格納するdfの作成
+    update_prediction_df = pd.DataFrame()
+    update_prediction_df["date"] = unpredicted_df[["date"]]
+    update_prediction_df["time"] = unpredicted_df[["time"]]
+
+    for i in tqdm(range(1, models_config.models_number + 1)):
+        update_prediction_df = pd.concat(
+            [
+                update_prediction_df,
+                generate_predict(
+                    i,
+                    stock_config.stock_name,
+                    lambda_config.tmp_dir,
+                    bucket,
+                    unpredicted_df[models_config.features_columns],
+                ),
+            ],
+            axis=1,
+        )
+
+    # convert float to decimal
+    update_prediction_df = update_prediction_df.apply(
+        lambda x: x.map(lambda y: Decimal(str(y)) if isinstance(y, float) else y)
+    )
+
+    # create_at column
+    update_prediction_df["create_at"] = datetime.now(lambda_config.timezone).isoformat()
+
+    print(update_prediction_df)
+
+    # update prediction table
+    upload_items: list[dict[str, str | Decimal]] = [
+        {str(k): Decimal(v) if str(k).isdigit() else str(v) for k, v in d.items()}
+        for d in update_prediction_df.to_dict("records")
+    ]
+    with tables.prediction_table.batch_writer() as batch:
+        for item in tqdm(upload_items):
+            batch.put_item(Item=item)
+
+    # update limit table
+    tables.limit_table.put_item(
+        Item={
+            "stock_id": stock_config.target_stock,
+            "operation": "prediction",
+            "create_at": datetime.now(lambda_config.timezone).isoformat(),
+            "max": pd.to_datetime(
+                update_prediction_df.tail(1)["date"].values[0]
+                + " "
+                + update_prediction_df.tail(1)["time"].values[0]
+            ).isoformat(),
+        }
+    )
+
+    return len(update_prediction_df)
+
+
 def handler(event: dict[str, str], _context: LambdaContext) -> dict[str, str]:
     """
     Main handler function for AWS Lambda.
@@ -263,6 +434,15 @@ def handler(event: dict[str, str], _context: LambdaContext) -> dict[str, str]:
         dynamodb.Table(os.environ["AWS_DYNAMODB_LIMIT_TABLE_NAME"]),
     )
 
+    s3: S3ServiceResource = boto3.resource(
+        "s3",
+        region_name=aws_auth.region_name,
+        aws_access_key_id=aws_auth.access_key_id,
+        aws_secret_access_key=aws_auth.secret_access_key,
+    )
+
+    s3_bucket: Bucket = s3.Bucket(os.environ["AWS_S3_BUCKET_NAME"])
+
     if event_handler == "update_stock_table":
         return {
             "message": "update_stock_table",
@@ -272,6 +452,20 @@ def handler(event: dict[str, str], _context: LambdaContext) -> dict[str, str]:
                     stock_configuration,
                     models_configuration.dataframe_columns_order,
                     dynamodb_tables,
+                )
+            ),
+        }
+
+    if event_handler == "update_predict":
+        return {
+            "message": "update_predict",
+            "update_num": str(
+                update_predict(
+                    lambda_configuration,
+                    stock_configuration,
+                    models_configuration,
+                    dynamodb_tables,
+                    s3_bucket,
                 )
             ),
         }
