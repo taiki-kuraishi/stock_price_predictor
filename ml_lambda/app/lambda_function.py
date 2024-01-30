@@ -470,4 +470,26 @@ def handler(event: dict[str, str], _context: LambdaContext) -> dict[str, str]:
             ),
         }
 
+    if event_handler == "update_and_predict_tables":
+        return {
+            "message": "update_and_predict_tables",
+            "update_stock_num": str(
+                update_stock_table(
+                    lambda_configuration.timezone,
+                    stock_configuration,
+                    models_configuration.dataframe_columns_order,
+                    dynamodb_tables,
+                )
+            ),
+            "update_predict_num": str(
+                update_predict(
+                    lambda_configuration,
+                    stock_configuration,
+                    models_configuration,
+                    dynamodb_tables,
+                    s3_bucket,
+                )
+            ),
+        }
+
     return {"message": "wrong handler"}
