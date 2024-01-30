@@ -14,7 +14,7 @@ import pytz
 import yfinance as yf
 from aws_lambda_context import LambdaContext
 from boto3.dynamodb.conditions import Key
-from joblib import load
+from joblib import dump, load
 from modules.configurations import (
     AWSAuth,
     DynamoDBTables,
@@ -22,7 +22,10 @@ from modules.configurations import (
     ModelsConfiguration,
     StockConfiguration,
 )
-from modules.data_preprocessing import post_process_stock_data_from_dynamodb
+from modules.data_preprocessing import (
+    post_process_stock_data_from_dynamodb,
+    shift_dataframe,
+)
 from mypy_boto3_dynamodb import DynamoDBServiceResource
 from mypy_boto3_s3 import S3ServiceResource
 from mypy_boto3_s3.service_resource import Bucket
@@ -363,6 +366,105 @@ def update_predict(
     return len(update_prediction_df)
 
 
+def update_model(
+    lambda_config: LambdaConfiguration,
+    stock_config: StockConfiguration,
+    models_config: ModelsConfiguration,
+    tables: DynamoDBTables,
+    bucket: Bucket,
+) -> int:
+    """
+    Updates the model and the limit table in DynamoDB.
+
+    This function partially fits the model for the specified stock
+    using data from the last trained date to the last stock update date.
+    The fitted model is then uploaded to an S3 bucket. Additionally,
+    a new entry is added to the limit table to update the last trained date.
+
+    Parameters:
+    lambda_config (LambdaConfiguration): The configuration for the lambda function.
+    stock_config (StockConfiguration): The configuration for the stock.
+    models_config (ModelsConfiguration): The configuration for the models.
+    tables (DynamoDBTables): The DynamoDB tables.
+    bucket (Bucket): The S3 bucket.
+
+    Returns:
+    int: The length of the untrained dataframe.
+    """
+    last_train_date = (
+        pd.to_datetime(
+            str(
+                tables.limit_table.get_item(
+                    Key={"stock_id": stock_config.target_stock, "operation": "train"}
+                )["Item"]["max"]
+            )
+        )
+        + timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+
+    last_stock_update_date = pd.to_datetime(
+        str(
+            tables.limit_table.get_item(
+                Key={"stock_id": stock_config.target_stock, "operation": "stock"}
+            )["Item"]["max"]
+        )
+    ).strftime("%Y-%m-%d")
+
+    print("\tlast train date : " + last_train_date)
+    print("\tlast stock update date : " + last_stock_update_date)
+
+    untrained_df = pd.DataFrame()
+    date = last_train_date
+    while date <= last_stock_update_date:
+        day_of_train_df = pd.DataFrame(
+            tables.stock_table.query(KeyConditionExpression=Key("date").eq(date))[
+                "Items"
+            ]
+        )
+        untrained_df = pd.concat([untrained_df, day_of_train_df])
+        date = (datetime.strptime(date, "%Y-%m-%d") + timedelta(days=1)).strftime(
+            "%Y-%m-%d"
+        )
+
+    if untrained_df.empty:
+        return 0
+
+    # カラムのソートと日付でソート
+    untrained_df = post_process_stock_data_from_dynamodb(
+        untrained_df, models_config.dataframe_columns_order
+    )
+
+    # model update
+    for i in tqdm(range(1, models_config.models_number + 1)):
+        model_file_name = (
+            f"spp_{stock_config.stock_name}_{str(i)}h_PassiveAggressiveRegressor.pkl"
+        )
+        model_local_path = f"{lambda_config.tmp_dir}/{model_file_name}"
+        bucket.download_file(f"models/{model_file_name}", model_local_path)
+        train_df = shift_dataframe(
+            df=untrained_df, shift_rows=i, target_col=models_config.target_column
+        )
+        model = load(model_local_path)
+        model.partial_fit(
+            train_df[models_config.features_columns],
+            train_df[models_config.target_column],
+        )
+        dump(model, model_local_path)
+        bucket.upload_file(model_local_path, f"models/{model_file_name}")
+
+    # update limit table
+    tables.limit_table.put_item(
+        Item={
+            "stock_id": stock_config.target_stock,
+            "operation": "train",
+            "create_at": datetime.now(lambda_config.timezone).isoformat(),
+            "max": last_stock_update_date,
+        }
+    )
+
+    return len(untrained_df)
+
+
 def handler(event: dict[str, str], _context: LambdaContext) -> dict[str, str]:
     """
     Main handler function for AWS Lambda.
@@ -483,6 +585,20 @@ def handler(event: dict[str, str], _context: LambdaContext) -> dict[str, str]:
             ),
             "update_predict_num": str(
                 update_predict(
+                    lambda_configuration,
+                    stock_configuration,
+                    models_configuration,
+                    dynamodb_tables,
+                    s3_bucket,
+                )
+            ),
+        }
+
+    if event_handler == "update_model":
+        return {
+            "message": "update_model",
+            "update_num": str(
+                update_model(
                     lambda_configuration,
                     stock_configuration,
                     models_configuration,
