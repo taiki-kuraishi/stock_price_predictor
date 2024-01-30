@@ -40,6 +40,7 @@ repos:
             "mypy-boto3-dynamodb==1.20.0",
             "mypy-boto3-s3==1.20.0",
             "python-dotenv==0.19.2",
+            "types-pytz==2023.3.1.1",
           ]
 
   - repo: https://github.com/pycqa/pylint
