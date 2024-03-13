@@ -33,7 +33,7 @@ repos:
     hooks:
       - id: mypy
         verbose: true
-        args: [--install-types, --strict]
+        args: [--install-types, --strict, --explicit-package-bases]
         additional_dependencies:
           [
             "boto3-stubs[essential]==1.20.0",
@@ -41,15 +41,16 @@ repos:
             "mypy-boto3-s3==1.20.0",
             "python-dotenv==0.19.2",
             "types-pytz==2023.3.1.1",
+            "types-requests"
           ]
 
   - repo: https://github.com/pycqa/pylint
-    rev: v3.0.3
+    rev: v3.1.0
     hooks:
       - id: pylint
         language: system
         types: [python]
-        args: [--output-format=colorized, --reports=yes]
+        args: [--output-format=colorized, --reports=yes, --recursive=y,--disable=duplicate-code]
 
   - repo: local
     hooks:
