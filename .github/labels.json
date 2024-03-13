@@ -1,0 +1,50 @@
+[
+    {
+        "name": "infrastructure",
+        "color": "6f42c1",
+        "description": "環境構築やCI/CDパイプラインの設定・問題",
+        "delete": false
+    },
+    {
+        "name": "bug",
+        "color": "F05032",
+        "description": "バグ",
+        "delete": false
+    },
+    {
+        "name": "security",
+        "color": "F05032",
+        "description": "セキュリティに関連する問題や脆弱性",
+        "delete": false
+    },
+    {
+        "name": "feature",
+        "color": "0E4BDB",
+        "description": "新しい機能",
+        "delete": false
+    },
+    {
+        "name": "enhancement",
+        "color": "84b6eb",
+        "description": "既存の機能の改善や拡張",
+        "delete": false
+    },
+    {
+        "name": "document",
+        "color": "F4BFD0",
+        "description": "ドキュメントの追加や修正",
+        "delete": false
+    },
+    {
+        "name": "refactor",
+        "color": "AFD38D",
+        "description": "リファクタリング",
+        "delete": false
+    },
+    {
+        "name": "deprecation",
+        "color": "D4A867",
+        "description": "機能の廃止",
+        "delete": false
+    }
+]
