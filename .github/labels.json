@@ -6,16 +6,10 @@
         "delete": false
     },
     {
-        "name": "bug",
-        "color": "F05032",
-        "description": "バグ",
-        "delete": false
-    },
-    {
-        "name": "security",
-        "color": "F05032",
-        "description": "セキュリティに関連する問題や脆弱性",
-        "delete": false
+        "name":"fix",
+        "color":"F05032",
+        "description":"バグ修正",
+        "delete":false
     },
     {
         "name": "feature",
