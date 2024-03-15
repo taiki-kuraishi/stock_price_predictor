@@ -20,6 +20,7 @@
         "./api_lambda/requirements.txt",
         "./ml_lambda/requirements.txt",
         "./tests/requirements-test.txt",
+        "LICENSE",
         ".gitignore"
     ]
 }
