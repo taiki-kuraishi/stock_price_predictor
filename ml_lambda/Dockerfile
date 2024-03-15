@@ -4,7 +4,7 @@ RUN pip install --upgrade pip
 
 COPY ./requirements.txt ${LAMBDA_TASK_ROOT}
 
-RUN pip install -r requirements.txt 
+RUN pip install -r requirements.txt
 # RUN pip install pysqlite3-binary
 
 # Copy function code

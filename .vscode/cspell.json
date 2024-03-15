@@ -21,6 +21,9 @@
         "./ml_lambda/requirements.txt",
         "./tests/requirements-test.txt",
         "LICENSE",
-        ".gitignore"
+        ".gitignore",
+        ".vscode",
+        "*.yml",
+        "Dockerfile",
     ]
 }

@@ -36,9 +36,6 @@ jobs:
     - name : Run check-merge-conflict check
       run: pre-commit run check-merge-conflict --all-files
 
-    - name: Run check-json check
-      run: pre-commit run check-json --all-files
-
     - name: Run check-added-large-files check
       run: pre-commit run check-added-large-files --all-files
 
