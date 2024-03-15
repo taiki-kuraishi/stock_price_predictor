@@ -82,7 +82,7 @@ jobs:
       run: black --check .
 
     - name: Run pylint
-      run: pylint .
+      run: pylint . --recursive=yes --disable=duplicate-code
 
     - name: Run mypy
-      run: mypy .
+      run: mypy . --install-types --strict --explicit-package-bases
